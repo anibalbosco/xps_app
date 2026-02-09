@@ -1,0 +1,293 @@
+"""XPS binding energy reference database.
+
+Standard binding energies from Moulder/PHI Handbook and NIST SRD 20.
+"""
+
+from __future__ import annotations
+
+import re
+from dataclasses import dataclass, field
+
+
+@dataclass
+class ChemicalState:
+    name: str
+    binding_energy: float
+    description: str = ""
+
+
+@dataclass
+class CoreLevelRef:
+    element_symbol: str
+    element_name: str
+    atomic_number: int
+    orbital: str
+    binding_energy: float
+    is_doublet: bool = False
+    splitting: float | None = None
+    branching_ratio: float | None = None
+    typical_sigma: float = 0.8
+    chemical_states: list[ChemicalState] = field(default_factory=list)
+    sensitivity_factor: float = 1.0
+
+
+def _r(sym, name, z, orb, be, *, dub=False, sp=None, br=None, sig=0.8, cs=None, rsf=1.0):
+    """Shorthand constructor."""
+    return CoreLevelRef(sym, name, z, orb, be, dub, sp, br, sig, cs or [], rsf)
+
+
+def _cs(name, be, desc=""):
+    return ChemicalState(name, be, desc)
+
+
+# === REFERENCE DATABASE ===
+# Values: Moulder/PHI Handbook, NIST SRD 20
+# Doublet info: p→br=0.5, d→br=0.667, f→br=0.75
+
+REFERENCE_DB: list[CoreLevelRef] = [
+    # --- Z=1-2: H, He ---
+    _r("H", "Hydrogen", 1, "1s", 13.6, rsf=0.01),
+    _r("He", "Helium", 2, "1s", 24.6, rsf=0.01),
+    # --- Z=3-4: Li, Be ---
+    _r("Li", "Lithium", 3, "1s", 54.7, sig=0.9, rsf=0.02,
+       cs=[_cs("Li metal", 54.7), _cs("Li2O", 55.6)]),
+    _r("Be", "Beryllium", 4, "1s", 111.5, sig=0.9, rsf=0.06,
+       cs=[_cs("Be metal", 111.5), _cs("BeO", 113.8)]),
+    # --- Z=5: B ---
+    _r("B", "Boron", 5, "1s", 187.5, sig=0.8, rsf=0.13,
+       cs=[_cs("B elemental", 187.5), _cs("B2O3", 193.0), _cs("BN", 190.5)]),
+    # --- Z=6: C ---
+    _r("C", "Carbon", 6, "1s", 284.8, sig=0.6, rsf=0.25,
+       cs=[_cs("C-C", 284.8, "Adventitious/graphitic"), _cs("C-O", 286.3, "Alcohol/ether"),
+           _cs("C=O", 287.8, "Carbonyl"), _cs("O-C=O", 289.0, "Carboxyl/ester"),
+           _cs("CO3", 290.1, "Carbonate"), _cs("CF2", 291.8, "PTFE-like"),
+           _cs("CF3", 293.4, "Fluorocarbon")]),
+    # --- Z=7: N ---
+    _r("N", "Nitrogen", 7, "1s", 398.1, sig=0.8, rsf=0.42,
+       cs=[_cs("Metal nitride", 397.2), _cs("Amine", 399.5), _cs("Amide", 400.0),
+           _cs("Pyrrolic", 400.3), _cs("Quaternary-N", 401.5),
+           _cs("N-oxide", 402.0), _cs("Nitrate", 407.2)]),
+    # --- Z=8: O ---
+    _r("O", "Oxygen", 8, "1s", 530.0, sig=0.8, rsf=0.66,
+       cs=[_cs("Metal oxide", 529.8, "Lattice O2-"), _cs("Hydroxide", 531.2, "OH/C=O"),
+           _cs("C-O", 532.5, "Ether/alcohol/water"), _cs("Adsorbed H2O", 533.5)]),
+    # --- Z=9: F ---
+    _r("F", "Fluorine", 9, "1s", 685.0, sig=0.9, rsf=1.00,
+       cs=[_cs("Metal fluoride", 684.5), _cs("Organic F", 688.0, "C-F bond")]),
+    # --- Z=10: Ne ---
+    _r("Ne", "Neon", 10, "1s", 870.2, rsf=0.01),
+    # --- Z=11: Na ---
+    _r("Na", "Sodium", 11, "1s", 1071.8, sig=1.0, rsf=2.30,
+       cs=[_cs("Na metal", 1071.8), _cs("Na2O", 1072.5), _cs("NaCl", 1071.6)]),
+    # --- Z=12: Mg ---
+    _r("Mg", "Magnesium", 12, "2p3/2", 49.7, dub=True, sp=0.28, br=0.5, sig=0.7, rsf=0.12,
+       cs=[_cs("Mg metal", 49.7), _cs("MgO", 50.8)]),
+    _r("Mg", "Magnesium", 12, "1s", 1303.0, sig=1.2, rsf=3.00),
+    # --- Z=13: Al ---
+    _r("Al", "Aluminum", 13, "2p3/2", 72.7, dub=True, sp=0.44, br=0.5, sig=0.7, rsf=0.18,
+       cs=[_cs("Al metal", 72.7), _cs("Al2O3", 74.5, "Alumina")]),
+    # --- Z=14: Si ---
+    _r("Si", "Silicon", 14, "2p3/2", 99.3, dub=True, sp=0.6, br=0.5, sig=0.7, rsf=0.27,
+       cs=[_cs("Si elemental", 99.3), _cs("SiO", 101.5), _cs("Si3N4", 101.8),
+           _cs("SiO2", 103.3, "Quartz/glass")]),
+    # --- Z=15: P ---
+    _r("P", "Phosphorus", 15, "2p3/2", 130.0, dub=True, sp=0.87, br=0.5, sig=0.8, rsf=0.39,
+       cs=[_cs("P elemental", 130.0), _cs("Phosphate", 133.5, "PO4 3-")]),
+    # --- Z=16: S ---
+    _r("S", "Sulfur", 16, "2p3/2", 164.0, dub=True, sp=1.16, br=0.5, sig=0.7, rsf=0.54,
+       cs=[_cs("Sulfide", 161.5, "S2-"), _cs("Thiol", 162.5, "R-SH"),
+           _cs("S elemental", 164.0), _cs("Sulfite", 166.5, "SO3 2-"),
+           _cs("Sulfonate", 167.5, "R-SO3"), _cs("Sulfate", 169.0, "SO4 2-")]),
+    # --- Z=17: Cl ---
+    _r("Cl", "Chlorine", 17, "2p3/2", 200.0, dub=True, sp=1.6, br=0.5, sig=0.8, rsf=0.73,
+       cs=[_cs("Chloride", 198.5, "Cl-"), _cs("Organic Cl", 200.5, "C-Cl"),
+           _cs("ClO3", 207.0, "Chlorate")]),
+    # --- Z=18: Ar ---
+    _r("Ar", "Argon", 18, "2p3/2", 248.4, dub=True, sp=2.1, br=0.5, rsf=0.96),
+    # --- Z=19: K ---
+    _r("K", "Potassium", 19, "2p3/2", 293.0, dub=True, sp=2.8, br=0.5, sig=0.8, rsf=1.24,
+       cs=[_cs("K metal", 293.0), _cs("K2O", 293.6)]),
+    # --- Z=20: Ca ---
+    _r("Ca", "Calcium", 20, "2p3/2", 346.0, dub=True, sp=3.5, br=0.5, sig=0.9, rsf=1.58,
+       cs=[_cs("Ca metal", 346.0), _cs("CaO", 347.0), _cs("CaCO3", 347.2)]),
+    # --- Z=21-30: Sc through Zn (3d transition metals) ---
+    _r("Sc", "Scandium", 21, "2p3/2", 398.5, dub=True, sp=4.0, br=0.5, sig=1.0, rsf=1.97),
+    _r("Ti", "Titanium", 22, "2p3/2", 454.0, dub=True, sp=5.7, br=0.5, sig=0.9, rsf=2.00,
+       cs=[_cs("Ti metal", 454.0), _cs("TiN", 455.8), _cs("Ti2O3", 457.5),
+           _cs("TiO2", 458.8, "Rutile/anatase")]),
+    _r("V", "Vanadium", 23, "2p3/2", 512.1, dub=True, sp=7.3, br=0.5, sig=1.0, rsf=2.12,
+       cs=[_cs("V metal", 512.1), _cs("V2O3", 515.7), _cs("V2O5", 517.2)]),
+    _r("Cr", "Chromium", 24, "2p3/2", 574.2, dub=True, sp=9.0, br=0.5, sig=1.0, rsf=2.30,
+       cs=[_cs("Cr metal", 574.2), _cs("Cr2O3", 576.4), _cs("CrO3", 579.2)]),
+    _r("Mn", "Manganese", 25, "2p3/2", 639.0, dub=True, sp=11.1, br=0.5, sig=1.0, rsf=2.66,
+       cs=[_cs("Mn metal", 639.0), _cs("MnO", 641.0), _cs("MnO2", 642.2)]),
+    _r("Fe", "Iron", 26, "2p3/2", 706.8, dub=True, sp=13.6, br=0.5, sig=1.2, rsf=2.96,
+       cs=[_cs("Fe metal", 706.8), _cs("FeO", 709.5, "Fe2+"),
+           _cs("Fe2O3", 710.8, "Fe3+"), _cs("Satellite", 719.0, "Shake-up")]),
+    _r("Co", "Cobalt", 27, "2p3/2", 778.2, dub=True, sp=15.0, br=0.5, sig=1.1, rsf=3.59,
+       cs=[_cs("Co metal", 778.2), _cs("CoO", 780.3), _cs("Co3O4", 779.8)]),
+    _r("Ni", "Nickel", 28, "2p3/2", 852.7, dub=True, sp=17.3, br=0.5, sig=1.1, rsf=4.04,
+       cs=[_cs("Ni metal", 852.7), _cs("NiO", 854.0), _cs("Ni(OH)2", 855.8),
+           _cs("NiOOH", 856.1)]),
+    _r("Cu", "Copper", 29, "2p3/2", 932.6, dub=True, sp=19.8, br=0.5, sig=1.0, rsf=4.40,
+       cs=[_cs("Cu metal", 932.6), _cs("Cu2O", 932.4, "Cu+"),
+           _cs("CuO", 933.8, "Cu2+"), _cs("Cu(OH)2", 934.7)]),
+    _r("Zn", "Zinc", 30, "2p3/2", 1021.8, dub=True, sp=23.0, br=0.5, sig=1.0, rsf=4.80,
+       cs=[_cs("Zn metal", 1021.8), _cs("ZnO", 1022.1), _cs("ZnS", 1022.0)]),
+    # --- Z=31-36: Ga through Kr ---
+    _r("Ga", "Gallium", 31, "2p3/2", 1117.4, dub=True, sp=26.8, br=0.5, sig=1.1, rsf=5.40,
+       cs=[_cs("Ga metal", 1117.4), _cs("Ga2O3", 1118.5)]),
+    _r("Ga", "Gallium", 31, "3d5/2", 18.7, dub=True, sp=0.45, br=0.667, sig=0.6, rsf=0.31),
+    _r("Ge", "Germanium", 32, "2p3/2", 1217.1, dub=True, sp=31.1, br=0.5, sig=1.2, rsf=5.70),
+    _r("Ge", "Germanium", 32, "3d5/2", 29.3, dub=True, sp=0.55, br=0.667, sig=0.6, rsf=0.41,
+       cs=[_cs("Ge elemental", 29.3), _cs("GeO2", 32.5)]),
+    _r("As", "Arsenic", 33, "3d5/2", 41.7, dub=True, sp=0.7, br=0.667, sig=0.7, rsf=0.57,
+       cs=[_cs("As elemental", 41.7), _cs("As2O3", 44.3), _cs("As2O5", 45.7)]),
+    _r("Se", "Selenium", 34, "3d5/2", 55.5, dub=True, sp=0.86, br=0.667, sig=0.7, rsf=0.67,
+       cs=[_cs("Se elemental", 55.5), _cs("SeO2", 59.0)]),
+    _r("Br", "Bromine", 35, "3d5/2", 70.4, dub=True, sp=1.04, br=0.667, sig=0.8, rsf=0.81,
+       cs=[_cs("Bromide", 68.5), _cs("Br organic", 70.4)]),
+    _r("Kr", "Krypton", 36, "3d5/2", 93.8, dub=True, sp=1.22, br=0.667, rsf=0.97),
+    # --- Z=37-48: Rb through Cd ---
+    _r("Rb", "Rubidium", 37, "3d5/2", 110.3, dub=True, sp=1.5, br=0.667, sig=0.8, rsf=1.23),
+    _r("Sr", "Strontium", 38, "3d5/2", 133.9, dub=True, sp=1.8, br=0.667, sig=0.9, rsf=1.50,
+       cs=[_cs("Sr metal", 133.9), _cs("SrO", 134.6), _cs("SrTiO3", 133.5)]),
+    _r("Y", "Yttrium", 39, "3d5/2", 156.0, dub=True, sp=2.1, br=0.667, sig=0.9, rsf=1.76,
+       cs=[_cs("Y metal", 156.0), _cs("Y2O3", 157.0)]),
+    _r("Zr", "Zirconium", 40, "3d5/2", 178.8, dub=True, sp=2.4, br=0.667, sig=0.9, rsf=2.00,
+       cs=[_cs("Zr metal", 178.8), _cs("ZrO2", 182.2)]),
+    _r("Nb", "Niobium", 41, "3d5/2", 202.4, dub=True, sp=2.7, br=0.667, sig=0.9, rsf=2.28,
+       cs=[_cs("Nb metal", 202.4), _cs("Nb2O5", 207.4)]),
+    _r("Mo", "Molybdenum", 42, "3d5/2", 227.6, dub=True, sp=3.1, br=0.667, sig=0.8, rsf=2.55,
+       cs=[_cs("Mo metal", 227.6), _cs("MoO2", 229.3), _cs("MoO3", 232.6)]),
+    _r("Tc", "Technetium", 43, "3d5/2", 253.0, dub=True, sp=3.5, br=0.667, rsf=2.80),
+    _r("Ru", "Ruthenium", 44, "3d5/2", 280.0, dub=True, sp=4.2, br=0.667, sig=0.8, rsf=3.05,
+       cs=[_cs("Ru metal", 280.0), _cs("RuO2", 280.8)]),
+    _r("Rh", "Rhodium", 45, "3d5/2", 307.1, dub=True, sp=4.7, br=0.667, sig=0.8, rsf=3.36,
+       cs=[_cs("Rh metal", 307.1), _cs("Rh2O3", 308.5)]),
+    _r("Pd", "Palladium", 46, "3d5/2", 335.3, dub=True, sp=5.3, br=0.667, sig=0.8, rsf=3.68,
+       cs=[_cs("Pd metal", 335.3), _cs("PdO", 336.8)]),
+    _r("Ag", "Silver", 47, "3d5/2", 368.2, dub=True, sp=6.0, br=0.667, sig=0.8, rsf=4.05,
+       cs=[_cs("Ag metal", 368.2), _cs("Ag2O", 367.8), _cs("AgCl", 368.3)]),
+    _r("Cd", "Cadmium", 48, "3d5/2", 405.0, dub=True, sp=6.7, br=0.667, sig=0.9, rsf=4.35,
+       cs=[_cs("Cd metal", 405.0), _cs("CdO", 404.5)]),
+    # --- Z=49-54: In through Xe ---
+    _r("In", "Indium", 49, "3d5/2", 443.8, dub=True, sp=7.6, br=0.667, sig=0.9, rsf=4.63,
+       cs=[_cs("In metal", 443.8), _cs("In2O3", 444.5)]),
+    _r("Sn", "Tin", 50, "3d5/2", 484.9, dub=True, sp=8.4, br=0.667, sig=0.9, rsf=4.95,
+       cs=[_cs("Sn metal", 484.9), _cs("SnO", 486.0), _cs("SnO2", 486.6)]),
+    _r("Sb", "Antimony", 51, "3d5/2", 528.2, dub=True, sp=9.4, br=0.667, sig=0.9, rsf=5.23,
+       cs=[_cs("Sb metal", 528.2), _cs("Sb2O3", 530.3), _cs("Sb2O5", 530.8)]),
+    _r("Te", "Tellurium", 52, "3d5/2", 573.0, dub=True, sp=10.4, br=0.667, sig=0.9, rsf=5.52,
+       cs=[_cs("Te metal", 573.0), _cs("TeO2", 576.2)]),
+    _r("I", "Iodine", 53, "3d5/2", 619.3, dub=True, sp=11.5, br=0.667, sig=1.0, rsf=5.80,
+       cs=[_cs("Iodide", 619.3), _cs("Iodate", 624.0)]),
+    _r("Xe", "Xenon", 54, "3d5/2", 676.4, dub=True, sp=12.6, br=0.667, rsf=6.10),
+    # --- Z=55-57: Cs, Ba, La ---
+    _r("Cs", "Cesium", 55, "3d5/2", 724.8, dub=True, sp=14.0, br=0.667, sig=1.0, rsf=6.40),
+    _r("Ba", "Barium", 56, "3d5/2", 780.5, dub=True, sp=15.3, br=0.667, sig=1.0, rsf=6.80,
+       cs=[_cs("Ba metal", 780.5), _cs("BaO", 779.7), _cs("BaCO3", 779.8)]),
+    _r("La", "Lanthanum", 57, "3d5/2", 835.0, dub=True, sp=16.8, br=0.667, sig=1.2, rsf=7.20,
+       cs=[_cs("La metal", 835.0), _cs("La2O3", 834.6)]),
+    # --- Z=58-71: Lanthanides ---
+    _r("Ce", "Cerium", 58, "3d5/2", 882.5, dub=True, sp=18.3, br=0.667, sig=1.5, rsf=7.50,
+       cs=[_cs("Ce metal", 882.5), _cs("CeO2", 882.3, "Ce4+"), _cs("Ce2O3", 885.0, "Ce3+")]),
+    _r("Pr", "Praseodymium", 59, "3d5/2", 932.0, dub=True, sp=20.0, br=0.667, sig=1.5, rsf=7.80),
+    _r("Nd", "Neodymium", 60, "3d5/2", 982.0, dub=True, sp=21.5, br=0.667, sig=1.5, rsf=8.10,
+       cs=[_cs("Nd metal", 982.0), _cs("Nd2O3", 983.0)]),
+    _r("Pm", "Promethium", 61, "3d5/2", 1032.0, dub=True, sp=23.0, br=0.667, rsf=8.40),
+    _r("Sm", "Samarium", 62, "3d5/2", 1083.0, dub=True, sp=24.6, br=0.667, sig=1.5, rsf=8.70),
+    _r("Eu", "Europium", 63, "3d5/2", 1135.0, dub=True, sp=29.2, br=0.667, sig=1.5, rsf=9.00,
+       cs=[_cs("Eu metal", 1135.0), _cs("Eu2O3", 1135.5)]),
+    _r("Gd", "Gadolinium", 64, "3d5/2", 1186.0, dub=True, sp=31.0, br=0.667, sig=1.5, rsf=9.30),
+    _r("Tb", "Terbium", 65, "3d5/2", 1241.0, dub=True, sp=33.0, br=0.667, sig=1.5, rsf=9.60),
+    _r("Dy", "Dysprosium", 66, "3d5/2", 1296.0, dub=True, sp=35.0, br=0.667, sig=1.5, rsf=9.90),
+    _r("Ho", "Holmium", 67, "3d5/2", 1351.0, dub=True, sp=37.0, br=0.667, sig=1.5, rsf=10.2),
+    _r("Er", "Erbium", 68, "4d5/2", 167.3, dub=True, sp=4.7, br=0.667, sig=1.2, rsf=3.20),
+    _r("Tm", "Thulium", 69, "4d5/2", 175.5, dub=True, sp=5.0, br=0.667, sig=1.2, rsf=3.40),
+    _r("Yb", "Ytterbium", 70, "4d5/2", 185.0, dub=True, sp=5.3, br=0.667, sig=1.2, rsf=3.60),
+    _r("Lu", "Lutetium", 71, "4d5/2", 196.0, dub=True, sp=5.6, br=0.667, sig=1.2, rsf=3.80),
+    # --- Z=72-80: Hf through Hg ---
+    _r("Hf", "Hafnium", 72, "4f7/2", 14.3, dub=True, sp=1.7, br=0.75, sig=0.6, rsf=1.90,
+       cs=[_cs("Hf metal", 14.3), _cs("HfO2", 17.1)]),
+    _r("Ta", "Tantalum", 73, "4f7/2", 21.6, dub=True, sp=1.9, br=0.75, sig=0.6, rsf=2.20,
+       cs=[_cs("Ta metal", 21.6), _cs("Ta2O5", 26.4)]),
+    _r("W", "Tungsten", 74, "4f7/2", 31.4, dub=True, sp=2.2, br=0.75, sig=0.5, rsf=2.50,
+       cs=[_cs("W metal", 31.4), _cs("WO3", 35.7)]),
+    _r("Re", "Rhenium", 75, "4f7/2", 40.3, dub=True, sp=2.4, br=0.75, sig=0.6, rsf=2.80),
+    _r("Os", "Osmium", 76, "4f7/2", 50.7, dub=True, sp=2.7, br=0.75, sig=0.6, rsf=3.10),
+    _r("Ir", "Iridium", 77, "4f7/2", 60.9, dub=True, sp=3.0, br=0.75, sig=0.6, rsf=3.40,
+       cs=[_cs("Ir metal", 60.9), _cs("IrO2", 62.0)]),
+    _r("Pt", "Platinum", 78, "4f7/2", 71.1, dub=True, sp=3.3, br=0.75, sig=0.6, rsf=3.80,
+       cs=[_cs("Pt metal", 71.1), _cs("PtO", 72.4), _cs("PtO2", 74.5)]),
+    _r("Au", "Gold", 79, "4f7/2", 84.0, dub=True, sp=3.7, br=0.75, sig=0.5, rsf=4.20,
+       cs=[_cs("Au metal", 84.0), _cs("Au2O3", 86.0)]),
+    _r("Hg", "Mercury", 80, "4f7/2", 100.0, dub=True, sp=4.0, br=0.75, sig=0.7, rsf=4.50),
+    # --- Z=81-92: Tl through U ---
+    _r("Tl", "Thallium", 81, "4f7/2", 117.7, dub=True, sp=4.4, br=0.75, sig=0.8, rsf=4.85),
+    _r("Pb", "Lead", 82, "4f7/2", 136.9, dub=True, sp=4.9, br=0.75, sig=0.8, rsf=5.20,
+       cs=[_cs("Pb metal", 136.9), _cs("PbO", 137.5), _cs("PbO2", 137.1)]),
+    _r("Bi", "Bismuth", 83, "4f7/2", 156.9, dub=True, sp=5.3, br=0.75, sig=0.8, rsf=5.60,
+       cs=[_cs("Bi metal", 156.9), _cs("Bi2O3", 159.0)]),
+    _r("Po", "Polonium", 84, "4f7/2", 177.0, dub=True, sp=5.8, br=0.75, rsf=6.00),
+    _r("At", "Astatine", 85, "4f7/2", 195.0, dub=True, sp=6.2, br=0.75, rsf=6.30),
+    _r("Rn", "Radon", 86, "4f7/2", 214.0, dub=True, sp=6.6, br=0.75, rsf=6.60),
+    _r("Fr", "Francium", 87, "4f7/2", 234.0, dub=True, sp=7.0, br=0.75, rsf=7.00),
+    _r("Ra", "Radium", 88, "4f7/2", 254.0, dub=True, sp=7.4, br=0.75, rsf=7.30),
+    _r("Ac", "Actinium", 89, "4f7/2", 272.0, dub=True, sp=7.8, br=0.75, rsf=7.60),
+    _r("Th", "Thorium", 90, "4f7/2", 333.1, dub=True, sp=8.6, br=0.75, sig=0.8, rsf=8.00,
+       cs=[_cs("Th metal", 333.1), _cs("ThO2", 333.7)]),
+    _r("Pa", "Protactinium", 91, "4f7/2", 360.0, dub=True, sp=9.0, br=0.75, rsf=8.30),
+    _r("U", "Uranium", 92, "4f7/2", 377.3, dub=True, sp=10.8, br=0.75, sig=1.0, rsf=8.60,
+       cs=[_cs("U metal", 377.3), _cs("UO2", 380.0), _cs("UO3", 381.5)]),
+]
+
+
+# === LOOKUP FUNCTIONS ===
+
+def get_core_levels_in_range(e_min: float, e_max: float) -> list[CoreLevelRef]:
+    """Return all core levels with binding energy in [e_min, e_max]."""
+    return [r for r in REFERENCE_DB if e_min <= r.binding_energy <= e_max]
+
+
+def get_core_level(symbol: str, orbital: str) -> CoreLevelRef | None:
+    """Look up a specific core level by element symbol and orbital."""
+    for r in REFERENCE_DB:
+        if r.element_symbol == symbol and r.orbital == orbital:
+            return r
+    return None
+
+
+def get_element(symbol: str) -> list[CoreLevelRef]:
+    """Return all core levels for an element."""
+    return [r for r in REFERENCE_DB if r.element_symbol == symbol]
+
+
+def parse_core_level_label(label: str) -> tuple[str, str] | None:
+    """Parse a core level label into (symbol, orbital).
+
+    Examples::
+
+        "C 1s"     -> ("C", "1s")
+        "Fe 2p"    -> ("Fe", "2p3/2")
+        "Fe 2p3/2" -> ("Fe", "2p3/2")
+        "Au 4f7/2" -> ("Au", "4f7/2")
+    """
+    label = label.strip()
+    m = re.match(r"([A-Z][a-z]?)\s+(\d[spdf])(\d/\d)?", label)
+    if not m:
+        return None
+    symbol = m.group(1)
+    base_orbital = m.group(2)
+    j_part = m.group(3)  # e.g. "3/2" or None
+
+    if j_part:
+        orbital = base_orbital + j_part
+    else:
+        # Default to the primary (higher-j) component
+        sub = base_orbital[-1]
+        defaults = {"s": "", "p": "3/2", "d": "5/2", "f": "7/2"}
+        suffix = defaults.get(sub, "")
+        orbital = base_orbital + suffix if suffix else base_orbital
+
+    return (symbol, orbital)

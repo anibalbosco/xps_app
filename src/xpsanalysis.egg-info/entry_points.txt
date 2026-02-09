@@ -1,0 +1,2 @@
+[console_scripts]
+xps = xpsanalysis.cli:app

@@ -1,0 +1,35 @@
+{
+  "peaks": [
+    {
+      "name": "CC",
+      "center": 284.8,
+      "sigma": 0.6,
+      "fraction": 0.3,
+      "amplitude": 1000,
+      "bounds": {
+        "center": {"min": 284.0, "max": 285.5}
+      }
+    },
+    {
+      "name": "CO",
+      "center": 286.3,
+      "sigma": 0.6,
+      "fraction": 0.3,
+      "amplitude": 400,
+      "bounds": {
+        "center": {"min": 285.5, "max": 287.0}
+      }
+    },
+    {
+      "name": "CeqO",
+      "center": 288.5,
+      "sigma": 0.7,
+      "fraction": 0.3,
+      "amplitude": 200,
+      "bounds": {
+        "center": {"min": 287.5, "max": 289.5}
+      }
+    }
+  ],
+  "shared_fwhm_groups": [["CC", "CO"]]
+}
