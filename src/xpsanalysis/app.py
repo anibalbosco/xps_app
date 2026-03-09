@@ -113,13 +113,25 @@ def _render_periodic_table():
             # Plot synthetic reference
             e_min = min(cs.binding_energy for cs in ref.chemical_states) - 5
             e_max = max(cs.binding_energy for cs in ref.chemical_states) + 5
+            if ref.is_doublet and ref.splitting:
+                e_max = max(e_max, max(cs.binding_energy + ref.splitting
+                            for cs in ref.chemical_states) + 5)
             x = np.linspace(e_min, e_max, 500)
             fig, ax = plt.subplots(figsize=(6, 2.5))
             total = np.zeros_like(x)
             for cs in ref.chemical_states:
-                y = _pseudo_voigt(x, cs.binding_energy, ref.typical_sigma, 0.3, 100)
-                ax.fill_between(x, y, alpha=0.3, label=cs.name)
-                total += y
+                amp = 100
+                y = _pseudo_voigt(x, cs.binding_energy, ref.typical_sigma, 0.3, amp)
+                if ref.is_doublet and ref.splitting and ref.branching_ratio:
+                    partner_amp = amp * ref.branching_ratio
+                    y_partner = _pseudo_voigt(x, cs.binding_energy + ref.splitting,
+                                             ref.typical_sigma, 0.3, partner_amp)
+                    y_combined = y + y_partner
+                    ax.fill_between(x, y_combined, alpha=0.3, label=cs.name)
+                    total += y_combined
+                else:
+                    ax.fill_between(x, y, alpha=0.3, label=cs.name)
+                    total += y
             ax.plot(x, total, "k-", linewidth=1, label="Sum")
             ax.set_xlabel("Binding Energy (eV)")
             ax.set_ylabel("Intensity (ref)")
