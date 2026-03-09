@@ -35,77 +35,112 @@ class CoreLevelRef:
 
 # === CITATION REGISTRY ===
 # Short keys used in reference fields map to full citations here.
-CITATIONS: dict[str, str] = {
-    "Moulder1995": (
-        "J.F. Moulder, W.F. Stickle, P.E. Sobol, K.D. Bomben, "
-        "Handbook of X-ray Photoelectron Spectroscopy, "
-        "Physical Electronics, Eden Prairie, MN, 1995."
-    ),
-    "Beamson1992": (
-        "G. Beamson, D. Briggs, "
-        "High Resolution XPS of Organic Polymers: The Scienta ESCA300 Database, "
-        "John Wiley & Sons, Chichester, 1992."
-    ),
-    "Biesinger2011": (
-        "M.C. Biesinger, B.P. Payne, A.P. Grosvenor, L.W.M. Lau, A.R. Gerson, R.St.C. Smart, "
-        "Resolving surface chemical states in XPS analysis of first row transition metals, "
-        "oxides and hydroxides: Cr, Mn, Fe, Co and Ni, "
-        "Appl. Surf. Sci. 257 (2011) 2717-2730."
-    ),
-    "Biesinger2017": (
-        "M.C. Biesinger, "
-        "Advanced analysis of copper X-ray photoelectron spectra, "
-        "Surf. Interface Anal. 49 (2017) 1325-1334."
-    ),
-    "Biesinger2004": (
-        "M.C. Biesinger, C. Brown, J.R. Mycroft, R.D. Davidson, N.S. McIntyre, "
-        "X-ray photoelectron spectroscopy studies of chromium compounds, "
-        "Surf. Interface Anal. 36 (2004) 1550-1563."
-    ),
-    "Biesinger2010": (
-        "M.C. Biesinger, L.W.M. Lau, A.R. Gerson, R.St.C. Smart, "
-        "Resolving surface chemical states in XPS analysis of first row transition metals, "
-        "oxides and hydroxides: Sc, Ti, V, Cu and Zn, "
-        "Appl. Surf. Sci. 257 (2010) 887-898."
-    ),
-    "Crist2000": (
-        "B.V. Crist, "
-        "Handbook of Monochromatic XPS Spectra, "
-        "XPS International LLC, 2000."
-    ),
-    "NIST_SRD20": (
-        "NIST X-ray Photoelectron Spectroscopy Database, "
-        "Standard Reference Database Number 20, "
-        "National Institute of Standards and Technology, Gaithersburg MD, 20899 (2000), "
-        "doi:10.18434/T4T88K."
-    ),
-    "Wagner1979": (
-        "C.D. Wagner, W.M. Riggs, L.E. Davis, J.F. Moulder, G.E. Muilenberg, "
-        "Handbook of X-ray Photoelectron Spectroscopy, "
-        "Perkin-Elmer Corp., Physical Electronics Division, Eden Prairie, MN, 1979."
-    ),
-    "Grosvenor2004": (
-        "A.P. Grosvenor, B.A. Kobe, M.C. Biesinger, N.S. McIntyre, "
-        "Investigation of multiplet splitting of Fe 2p XPS spectra and bonding in iron compounds, "
-        "Surf. Interface Anal. 36 (2004) 1564-1574."
-    ),
-    "Biesinger2009": (
-        "M.C. Biesinger, B.P. Payne, L.W.M. Lau, A.Gerson, R.St.C. Smart, "
-        "X-ray photoelectron spectroscopic chemical state quantification of mixed nickel "
-        "metal, oxide and hydroxide systems, "
-        "Surf. Interface Anal. 41 (2009) 324-332."
-    ),
-    "Payne2011": (
-        "B.P. Payne, M.C. Biesinger, N.S. McIntyre, "
-        "X-ray photoelectron spectroscopy studies of reactions on chromium metal and "
-        "chromium oxide surfaces, "
-        "J. Electron Spectrosc. Relat. Phenom. 184 (2011) 29-37."
-    ),
-    "Himpsel1988": (
-        "F.J. Himpsel, F.R. McFeely, A. Taleb-Ibrahimi, J.A. Yarmoff, G. Hollinger, "
-        "Microscopic structure of the SiO2/Si interface, "
-        "Phys. Rev. B 38 (1988) 6084-6096."
-    ),
+# Each entry has "citation" (full text) and optional "doi" (just the DOI number).
+CITATIONS: dict[str, dict[str, str]] = {
+    "Moulder1995": {
+        "citation": (
+            "J.F. Moulder, W.F. Stickle, P.E. Sobol, K.D. Bomben, "
+            "Handbook of X-ray Photoelectron Spectroscopy, "
+            "Physical Electronics, Eden Prairie, MN, 1995."
+        ),
+    },
+    "Beamson1992": {
+        "citation": (
+            "G. Beamson, D. Briggs, "
+            "High Resolution XPS of Organic Polymers: The Scienta ESCA300 Database, "
+            "John Wiley & Sons, Chichester, 1992."
+        ),
+    },
+    "Biesinger2011": {
+        "citation": (
+            "M.C. Biesinger, B.P. Payne, A.P. Grosvenor, L.W.M. Lau, A.R. Gerson, R.St.C. Smart, "
+            "Resolving surface chemical states in XPS analysis of first row transition metals, "
+            "oxides and hydroxides: Cr, Mn, Fe, Co and Ni, "
+            "Appl. Surf. Sci. 257 (2011) 2717-2730."
+        ),
+        "doi": "10.1016/j.apsusc.2010.10.051",
+    },
+    "Biesinger2017": {
+        "citation": (
+            "M.C. Biesinger, "
+            "Advanced analysis of copper X-ray photoelectron spectra, "
+            "Surf. Interface Anal. 49 (2017) 1325-1334."
+        ),
+        "doi": "10.1002/sia.6239",
+    },
+    "Biesinger2004": {
+        "citation": (
+            "M.C. Biesinger, C. Brown, J.R. Mycroft, R.D. Davidson, N.S. McIntyre, "
+            "X-ray photoelectron spectroscopy studies of chromium compounds, "
+            "Surf. Interface Anal. 36 (2004) 1550-1563."
+        ),
+        "doi": "10.1002/sia.1983",
+    },
+    "Biesinger2010": {
+        "citation": (
+            "M.C. Biesinger, L.W.M. Lau, A.R. Gerson, R.St.C. Smart, "
+            "Resolving surface chemical states in XPS analysis of first row transition metals, "
+            "oxides and hydroxides: Sc, Ti, V, Cu and Zn, "
+            "Appl. Surf. Sci. 257 (2010) 887-898."
+        ),
+        "doi": "10.1016/j.apsusc.2010.07.086",
+    },
+    "Crist2000": {
+        "citation": (
+            "B.V. Crist, "
+            "Handbook of Monochromatic XPS Spectra, "
+            "XPS International LLC, 2000."
+        ),
+    },
+    "NIST_SRD20": {
+        "citation": (
+            "NIST X-ray Photoelectron Spectroscopy Database, "
+            "Standard Reference Database Number 20, "
+            "National Institute of Standards and Technology, Gaithersburg MD, 20899 (2000)."
+        ),
+        "doi": "10.18434/T4T88K",
+    },
+    "Wagner1979": {
+        "citation": (
+            "C.D. Wagner, W.M. Riggs, L.E. Davis, J.F. Moulder, G.E. Muilenberg, "
+            "Handbook of X-ray Photoelectron Spectroscopy, "
+            "Perkin-Elmer Corp., Physical Electronics Division, Eden Prairie, MN, 1979."
+        ),
+    },
+    "Grosvenor2004": {
+        "citation": (
+            "A.P. Grosvenor, B.A. Kobe, M.C. Biesinger, N.S. McIntyre, "
+            "Investigation of multiplet splitting of Fe 2p XPS spectra and bonding in iron compounds, "
+            "Surf. Interface Anal. 36 (2004) 1564-1574."
+        ),
+        "doi": "10.1002/sia.1984",
+    },
+    "Biesinger2009": {
+        "citation": (
+            "M.C. Biesinger, B.P. Payne, L.W.M. Lau, A. Gerson, R.St.C. Smart, "
+            "X-ray photoelectron spectroscopic chemical state quantification of mixed nickel "
+            "metal, oxide and hydroxide systems, "
+            "Surf. Interface Anal. 41 (2009) 324-332."
+        ),
+        "doi": "10.1002/sia.3026",
+    },
+    "Payne2011": {
+        "citation": (
+            "B.P. Payne, M.C. Biesinger, N.S. McIntyre, "
+            "X-ray photoelectron spectroscopy studies of reactions on chromium metal and "
+            "chromium oxide surfaces, "
+            "J. Electron Spectrosc. Relat. Phenom. 184 (2011) 29-37."
+        ),
+        "doi": "10.1016/j.elspec.2010.12.001",
+    },
+    "Himpsel1988": {
+        "citation": (
+            "F.J. Himpsel, F.R. McFeely, A. Taleb-Ibrahimi, J.A. Yarmoff, G. Hollinger, "
+            "Microscopic structure of the SiO2/Si interface, "
+            "Phys. Rev. B 38 (1988) 6084-6096."
+        ),
+        "doi": "10.1103/PhysRevB.38.6084",
+    },
 }
 
 

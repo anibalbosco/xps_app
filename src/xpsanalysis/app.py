@@ -96,8 +96,19 @@ def _render_periodic_table():
             if used_refs:
                 with st.expander("References"):
                     for key in sorted(used_refs):
-                        citation = CITATIONS.get(key, key)
-                        st.caption(f"**[{key}]** {citation}")
+                        entry = CITATIONS.get(key)
+                        if entry:
+                            citation = entry["citation"]
+                            doi = entry.get("doi")
+                            if doi:
+                                st.caption(
+                                    f"**[{key}]** {citation} "
+                                    f"[doi:{doi}](https://doi.org/{doi})"
+                                )
+                            else:
+                                st.caption(f"**[{key}]** {citation}")
+                        else:
+                            st.caption(f"**[{key}]**")
 
             # Plot synthetic reference
             e_min = min(cs.binding_energy for cs in ref.chemical_states) - 5
