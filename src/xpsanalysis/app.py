@@ -142,10 +142,29 @@ def _render_periodic_table():
             st.pyplot(fig)
             plt.close(fig)
 
-    # ---- Peak Search ----
     st.markdown("---")
-    st.subheader("Peak Search — Identify Unknown Peaks")
+    st.markdown(
+        "**Data sources:** Binding energies and chemical state assignments "
+        "are compiled from the "
+        "[NIST X-ray Photoelectron Spectroscopy Database](https://srdata.nist.gov/xps/) "
+        "(Standard Reference Database 20, Version 4.1) and the "
+        "*Handbook of X-ray Photoelectron Spectroscopy* "
+        "(J.F. Moulder et al., Physical Electronics, 1995). "
+        "These are secondary compilations — each entry in the NIST database "
+        "includes full citations to the original experimental literature. "
+        "For primary references behind a specific assignment, consult the "
+        "NIST database entry for that element and core level."
+    )
+
+
+def _render_peak_search():
+    """Render the peak search / unknown species identification tab."""
     from xpsanalysis.reference import search_peak, XRAY_SOURCES
+
+    st.subheader("Peak Search — Identify Unknown Peaks")
+    st.caption(
+        "Enter the binding energy of an unknown peak to find matching "
+        "core levels and Auger lines.")
 
     search_cols = st.columns([2, 1, 2])
     with search_cols[0]:
@@ -161,7 +180,7 @@ def _render_periodic_table():
             "X-ray source", list(XRAY_SOURCES.keys()), key="xray_source")
     photon_energy = XRAY_SOURCES[source_name]
 
-    if st.button("Search", key="peak_search_btn"):
+    if st.button("Search", type="primary", key="peak_search_btn"):
         matches = search_peak(search_pos, search_tol, photon_energy)
         st.session_state["_peak_search_results"] = matches
         st.session_state["_peak_search_query"] = (search_pos, search_tol, source_name)
@@ -207,20 +226,6 @@ def _render_periodic_table():
                 st.caption(
                     "Auger peak positions in binding energy depend on the X-ray source. "
                     "The kinetic energy (KE) is source-independent.")
-
-    st.markdown("---")
-    st.markdown(
-        "**Data sources:** Binding energies and chemical state assignments "
-        "are compiled from the "
-        "[NIST X-ray Photoelectron Spectroscopy Database](https://srdata.nist.gov/xps/) "
-        "(Standard Reference Database 20, Version 4.1) and the "
-        "*Handbook of X-ray Photoelectron Spectroscopy* "
-        "(J.F. Moulder et al., Physical Electronics, 1995). "
-        "These are secondary compilations — each entry in the NIST database "
-        "includes full citations to the original experimental literature. "
-        "For primary references behind a specific assignment, consult the "
-        "NIST database entry for that element and core level."
-    )
 
 
 def _run_fit_section(spectrum, peaks, doublets, shared_fwhm_groups, bg_method,
@@ -284,7 +289,8 @@ def _run_fit_section(spectrum, peaks, doublets, shared_fwhm_groups, bg_method,
 
 
 def main() -> None:
-    tab_periodic, tab_analysis = st.tabs(["Periodic Table Reference", "Spectrum Analysis"])
+    tab_periodic, tab_search, tab_analysis = st.tabs([
+        "Periodic Table Reference", "Peak Search", "Spectrum Analysis"])
 
     # ---- Sidebar: file upload and settings ----
     with st.sidebar:
@@ -297,6 +303,10 @@ def main() -> None:
     # ---- Periodic Table tab (always available) ----
     with tab_periodic:
         _render_periodic_table()
+
+    # ---- Peak Search tab ----
+    with tab_search:
+        _render_peak_search()
 
     # ---- Analysis tab ----
     with tab_analysis:
