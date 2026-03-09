@@ -183,7 +183,7 @@ def _run_fit_section(spectrum, peaks, doublets, shared_fwhm_groups, bg_method,
 
 
 def main() -> None:
-    tab_analysis, tab_periodic = st.tabs(["Spectrum Analysis", "Periodic Table Reference"])
+    tab_periodic, tab_analysis = st.tabs(["Periodic Table Reference", "Spectrum Analysis"])
 
     # ---- Sidebar: file upload and settings ----
     with st.sidebar:
