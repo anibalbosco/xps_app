@@ -87,7 +87,7 @@ def _render_periodic_table():
                 ref_short = cs.reference or ref.reference
                 rows.append({"State": cs.name, "BE (eV)": f"{cs.binding_energy:.1f}",
                              "Description": cs.description,
-                             "Reference": ref_short})
+                             "Reference": ref_short if ref_short else "Not known"})
             st.table(rows)
 
             # Show full citations for references used in this table
