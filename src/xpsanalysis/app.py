@@ -142,6 +142,72 @@ def _render_periodic_table():
             st.pyplot(fig)
             plt.close(fig)
 
+    # ---- Peak Search ----
+    st.markdown("---")
+    st.subheader("Peak Search — Identify Unknown Peaks")
+    from xpsanalysis.reference import search_peak, XRAY_SOURCES
+
+    search_cols = st.columns([2, 1, 2])
+    with search_cols[0]:
+        search_pos = st.number_input(
+            "Peak position (eV)", value=284.8, format="%.1f",
+            key="peak_search_pos")
+    with search_cols[1]:
+        search_tol = st.number_input(
+            "Tolerance ± (eV)", value=5.0, min_value=0.1, max_value=50.0,
+            format="%.1f", key="peak_search_tol")
+    with search_cols[2]:
+        source_name = st.selectbox(
+            "X-ray source", list(XRAY_SOURCES.keys()), key="xray_source")
+    photon_energy = XRAY_SOURCES[source_name]
+
+    if st.button("Search", key="peak_search_btn"):
+        matches = search_peak(search_pos, search_tol, photon_energy)
+        st.session_state["_peak_search_results"] = matches
+        st.session_state["_peak_search_query"] = (search_pos, search_tol, source_name)
+
+    results = st.session_state.get("_peak_search_results")
+    query = st.session_state.get("_peak_search_query")
+    if results is not None and query:
+        qpos, qtol, qsrc = query
+        st.caption(
+            f"Matches for **{qpos:.1f} eV** ± {qtol:.1f} eV "
+            f"(source: {qsrc})")
+        if not results:
+            st.info("No matches found. Try increasing the tolerance.")
+        else:
+            core_matches = [m for m in results if m.match_type == "core_level"]
+            auger_matches = [m for m in results if m.match_type == "auger"]
+
+            if core_matches:
+                st.markdown("**Core levels:**")
+                rows = []
+                for m in core_matches:
+                    rows.append({
+                        "Line": m.line_label,
+                        "BE (eV)": f"{m.energy:.1f}",
+                        "Δ (eV)": f"{m.delta:+.1f}",
+                        "Element": f"{m.element_name} ({m.element_symbol})",
+                    })
+                st.table(rows)
+
+            if auger_matches:
+                st.markdown("**Auger lines:**")
+                rows = []
+                for m in auger_matches:
+                    ke = photon_energy - m.energy
+                    rows.append({
+                        "Line": m.line_label,
+                        "Apparent BE (eV)": f"{m.energy:.1f}",
+                        "KE (eV)": f"{ke:.1f}",
+                        "Δ (eV)": f"{m.delta:+.1f}",
+                        "Element": f"{m.element_name} ({m.element_symbol})",
+                    })
+                st.table(rows)
+                st.caption(
+                    "Auger peak positions in binding energy depend on the X-ray source. "
+                    "The kinetic energy (KE) is source-independent.")
+
     st.markdown("---")
     st.markdown(
         "**Data sources:** Binding energies and chemical state assignments "

@@ -394,11 +394,166 @@ REFERENCE_DB: list[CoreLevelRef] = [
 ]
 
 
+# === X-RAY SOURCES ===
+XRAY_SOURCES: dict[str, float] = {
+    "Al Kα (1486.6 eV)": 1486.6,
+    "Mg Kα (1253.6 eV)": 1253.6,
+}
+
+# === AUGER LINE DATABASE ===
+# Kinetic energies of principal Auger transitions (eV).
+# These are source-independent; apparent BE = hν - KE.
+
+@dataclass
+class AugerLine:
+    element_symbol: str
+    element_name: str
+    transition: str
+    kinetic_energy: float
+
+AUGER_DB: list[AugerLine] = [
+    # KLL transitions
+    AugerLine("C", "Carbon", "KLL", 263.0),
+    AugerLine("N", "Nitrogen", "KLL", 379.0),
+    AugerLine("O", "Oxygen", "KLL", 510.0),
+    AugerLine("F", "Fluorine", "KLL", 656.0),
+    AugerLine("Na", "Sodium", "KLL", 990.0),
+    AugerLine("Mg", "Magnesium", "KLL", 1186.0),
+    AugerLine("Al", "Aluminum", "KLL", 1393.0),
+    AugerLine("Si", "Silicon", "KLL", 1619.0),
+    # LMM transitions
+    AugerLine("P", "Phosphorus", "LMM", 120.0),
+    AugerLine("S", "Sulfur", "LMM", 152.0),
+    AugerLine("Cl", "Chlorine", "LMM", 181.0),
+    AugerLine("K", "Potassium", "LMM", 252.0),
+    AugerLine("Ca", "Calcium", "LMM", 291.0),
+    AugerLine("Ti", "Titanium", "LMM", 418.0),
+    AugerLine("V", "Vanadium", "LMM", 473.0),
+    AugerLine("Cr", "Chromium", "LMM", 529.0),
+    AugerLine("Mn", "Manganese", "LMM", 589.0),
+    AugerLine("Fe", "Iron", "LMM", 703.0),
+    AugerLine("Co", "Cobalt", "LMM", 775.0),
+    AugerLine("Ni", "Nickel", "LMM", 848.0),
+    AugerLine("Cu", "Copper", "LMM", 918.0),
+    AugerLine("Zn", "Zinc", "LMM", 988.0),
+    AugerLine("Ga", "Gallium", "LMM", 1068.0),
+    AugerLine("Ge", "Germanium", "LMM", 1147.0),
+    AugerLine("As", "Arsenic", "LMM", 1228.0),
+    # MNN transitions
+    AugerLine("Zr", "Zirconium", "MNN", 147.0),
+    AugerLine("Nb", "Niobium", "MNN", 167.0),
+    AugerLine("Mo", "Molybdenum", "MNN", 186.0),
+    AugerLine("Ru", "Ruthenium", "MNN", 228.0),
+    AugerLine("Rh", "Rhodium", "MNN", 253.0),
+    AugerLine("Pd", "Palladium", "MNN", 279.0),
+    AugerLine("Ag", "Silver", "MNN", 351.0),
+    AugerLine("Cd", "Cadmium", "MNN", 376.0),
+    AugerLine("In", "Indium", "MNN", 404.0),
+    AugerLine("Sn", "Tin", "MNN", 430.0),
+    AugerLine("Sb", "Antimony", "MNN", 454.0),
+    AugerLine("Te", "Tellurium", "MNN", 483.0),
+    AugerLine("Ba", "Barium", "MNN", 584.0),
+    AugerLine("La", "Lanthanum", "MNN", 625.0),
+    AugerLine("Ce", "Cerium", "MNN", 661.0),
+    AugerLine("Pb", "Lead", "MNN", 94.0),
+    AugerLine("Bi", "Bismuth", "MNN", 101.0),
+    # NOO / NVV transitions
+    AugerLine("Hf", "Hafnium", "NOO", 176.0),
+    AugerLine("Ta", "Tantalum", "NOO", 179.0),
+    AugerLine("W", "Tungsten", "NOO", 179.0),
+    AugerLine("Pt", "Platinum", "NOO", 168.0),
+    AugerLine("Au", "Gold", "NOO", 165.0),
+]
+
+
 # === LOOKUP FUNCTIONS ===
 
 def get_core_levels_in_range(e_min: float, e_max: float) -> list[CoreLevelRef]:
     """Return all core levels with binding energy in [e_min, e_max]."""
     return [r for r in REFERENCE_DB if e_min <= r.binding_energy <= e_max]
+
+
+@dataclass
+class PeakMatch:
+    """A candidate match for an unknown peak position."""
+    element_symbol: str
+    element_name: str
+    line_label: str
+    energy: float
+    delta: float
+    match_type: str  # "core_level" or "auger"
+
+
+def search_peak(position: float, tolerance: float = 5.0,
+                photon_energy: float = 1486.6) -> list[PeakMatch]:
+    """Search for core levels and Auger lines matching a peak position.
+
+    Parameters
+    ----------
+    position : float
+        Observed peak position in binding energy (eV).
+    tolerance : float
+        Search window ± this value (eV).
+    photon_energy : float
+        X-ray source energy (eV), needed for Auger apparent BE.
+
+    Returns
+    -------
+    List of PeakMatch sorted by |delta|.
+    """
+    matches: list[PeakMatch] = []
+    e_min = position - tolerance
+    e_max = position + tolerance
+
+    # Core levels (primary peak)
+    for r in REFERENCE_DB:
+        if e_min <= r.binding_energy <= e_max:
+            matches.append(PeakMatch(
+                element_symbol=r.element_symbol,
+                element_name=r.element_name,
+                line_label=f"{r.element_symbol} {r.orbital}",
+                energy=r.binding_energy,
+                delta=position - r.binding_energy,
+                match_type="core_level",
+            ))
+        # Also check the doublet partner
+        if r.is_doublet and r.splitting:
+            partner_be = r.binding_energy + r.splitting
+            if e_min <= partner_be <= e_max:
+                # Determine partner orbital label
+                orb = r.orbital
+                if "3/2" in orb:
+                    partner_orb = orb.replace("3/2", "1/2")
+                elif "5/2" in orb:
+                    partner_orb = orb.replace("5/2", "3/2")
+                elif "7/2" in orb:
+                    partner_orb = orb.replace("7/2", "5/2")
+                else:
+                    partner_orb = orb + "'"
+                matches.append(PeakMatch(
+                    element_symbol=r.element_symbol,
+                    element_name=r.element_name,
+                    line_label=f"{r.element_symbol} {partner_orb}",
+                    energy=partner_be,
+                    delta=position - partner_be,
+                    match_type="core_level",
+                ))
+
+    # Auger lines (convert KE to apparent BE)
+    for aug in AUGER_DB:
+        apparent_be = photon_energy - aug.kinetic_energy
+        if e_min <= apparent_be <= e_max:
+            matches.append(PeakMatch(
+                element_symbol=aug.element_symbol,
+                element_name=aug.element_name,
+                line_label=f"{aug.element_symbol} {aug.transition} Auger",
+                energy=apparent_be,
+                delta=position - apparent_be,
+                match_type="auger",
+            ))
+
+    matches.sort(key=lambda m: abs(m.delta))
+    return matches
 
 
 def get_core_level(symbol: str, orbital: str) -> CoreLevelRef | None:

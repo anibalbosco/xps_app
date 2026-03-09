@@ -6,7 +6,10 @@ from xpsanalysis.background import shirley_background, tougaard_background
 from xpsanalysis.models import PeakSpec, DoubletSpec, build_composite_model, pseudo_voigt
 from xpsanalysis.fitting import FitResult, fit_spectrum
 from xpsanalysis.synthetic import generate_c1s, generate_fe2p
-from xpsanalysis.reference import CoreLevelRef, ChemicalState, REFERENCE_DB, CITATIONS
+from xpsanalysis.reference import (
+    CoreLevelRef, ChemicalState, REFERENCE_DB, CITATIONS,
+    AugerLine, AUGER_DB, XRAY_SOURCES, search_peak,
+)
 from xpsanalysis.identify import IdentificationResult, identify_spectrum
 
 __all__ = [
