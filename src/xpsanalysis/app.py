@@ -81,11 +81,23 @@ def _render_periodic_table():
             st.caption(f"Splitting: {ref.splitting:.1f} eV, ratio: {ref.branching_ratio}")
 
         if ref.chemical_states:
+            from xpsanalysis.reference import CITATIONS
             rows = []
             for cs in ref.chemical_states:
+                ref_short = cs.reference or ref.reference
                 rows.append({"State": cs.name, "BE (eV)": f"{cs.binding_energy:.1f}",
-                             "Description": cs.description})
+                             "Description": cs.description,
+                             "Reference": ref_short})
             st.table(rows)
+
+            # Show full citations for references used in this table
+            used_refs = {cs.reference or ref.reference for cs in ref.chemical_states}
+            used_refs.discard("")
+            if used_refs:
+                with st.expander("References"):
+                    for key in sorted(used_refs):
+                        citation = CITATIONS.get(key, key)
+                        st.caption(f"**[{key}]** {citation}")
 
             # Plot synthetic reference
             e_min = min(cs.binding_energy for cs in ref.chemical_states) - 5
