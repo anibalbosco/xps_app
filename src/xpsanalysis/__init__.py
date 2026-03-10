@@ -11,6 +11,7 @@ from xpsanalysis.reference import (
     AugerLine, AUGER_DB, XRAY_SOURCES, search_peak,
 )
 from xpsanalysis.identify import IdentificationResult, identify_spectrum
+from xpsanalysis.transmission import TransmissionResult, extract_transmission
 
 __all__ = [
     "XPSSpectrum",
@@ -36,4 +37,6 @@ __all__ = [
     "CITATIONS",
     "IdentificationResult",
     "identify_spectrum",
+    "TransmissionResult",
+    "extract_transmission",
 ]

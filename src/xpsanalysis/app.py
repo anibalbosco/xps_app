@@ -720,10 +720,168 @@ def _generate_simulation(active_states, amounts, composition):
     st.rerun()
 
 
+def _render_transmission_tab():
+    """Render the transmission function extraction tab."""
+    from xpsanalysis.reference import XRAY_SOURCES
+
+    st.subheader("Transmission Function — T(KE)")
+    st.caption(
+        "Upload a survey spectrum to extract the analyzer transmission function. "
+        "The background shape (secondary electrons) encodes T(KE). Peaks are "
+        "automatically masked, the secondary cascade (∝ 1/KE²) is divided out, "
+        "and a power law T(KE) = a × KE^n is fitted.")
+
+    # File uploader specific to this tab
+    survey_file = st.file_uploader(
+        "Upload survey spectrum", type=["csv", "vms", "xy", "dat", "txt"],
+        key="transmission_upload")
+
+    if survey_file is None:
+        st.info("Upload a survey spectrum (wide energy range, e.g. 0–1400 eV) to extract T(KE).")
+        return
+
+    from xpsanalysis.io import load_spectrum
+
+    cache_key = f"tf_survey_{survey_file.name}_{survey_file.size}"
+    if cache_key not in st.session_state:
+        suffix = Path(survey_file.name).suffix
+        with tempfile.NamedTemporaryFile(suffix=suffix, delete=False) as tmp:
+            tmp.write(survey_file.read())
+            tmp_path = tmp.name
+        st.session_state[cache_key] = load_spectrum(tmp_path)
+
+    spectra = st.session_state[cache_key]
+
+    # Pick region if multiple
+    region_idx = 0
+    if len(spectra) > 1:
+        labels = [f"Region {i}" + (f" ({s.metadata.core_level})" if s.metadata.core_level else "")
+                  for i, s in enumerate(spectra)]
+        region_idx = st.selectbox("Select region", range(len(spectra)),
+                                  format_func=lambda i: labels[i], key="tf_region")
+    spectrum = spectra[region_idx]
+
+    # Show raw survey
+    fig_raw, ax_raw = plt.subplots(figsize=(10, 3))
+    ax_raw.plot(spectrum.energy, spectrum.intensity, "k-", linewidth=0.6)
+    ax_raw.set_xlabel("Binding Energy (eV)")
+    ax_raw.set_ylabel("Intensity")
+    ax_raw.invert_xaxis()
+    ax_raw.set_title("Survey Spectrum")
+    fig_raw.tight_layout()
+    st.pyplot(fig_raw)
+    plt.close(fig_raw)
+
+    # Parameters
+    col1, col2, col3 = st.columns(3)
+    with col1:
+        source_name = st.selectbox("X-ray source", list(XRAY_SOURCES.keys()),
+                                   key="tf_source")
+        photon_energy = XRAY_SOURCES[source_name]
+    with col2:
+        mask_width = st.number_input("Peak mask width ± (eV)", value=8.0,
+                                     min_value=2.0, max_value=30.0, step=1.0,
+                                     key="tf_mask_width")
+    with col3:
+        ke_min = st.number_input("Min KE (eV)", value=50.0, min_value=10.0,
+                                 max_value=500.0, step=10.0, key="tf_ke_min")
+
+    if st.button("Extract T(KE)", type="primary", key="tf_extract"):
+        from xpsanalysis.transmission import extract_transmission
+        try:
+            result = extract_transmission(
+                spectrum.energy, spectrum.intensity,
+                photon_energy=photon_energy,
+                mask_width_ev=mask_width,
+                ke_min=ke_min,
+            )
+            st.session_state["_tf_result"] = result
+        except ValueError as e:
+            st.error(str(e))
+            return
+
+    result = st.session_state.get("_tf_result")
+    if result is None:
+        return
+
+    # Display results
+    st.markdown("---")
+    st.subheader("Results")
+
+    n_sign = "+" if result.n >= 0 else "−"
+    st.markdown(
+        f"**T(KE) = {result.a:.4f} × KE^({result.n:+.3f})**")
+    st.caption(
+        f"Exponent n = {result.n:.3f} ± {result.n_err:.3f} · "
+        f"Prefactor a = {result.a:.4f} ± {result.a_err:.4f}")
+
+    # Plot 1: Background with peaks masked
+    fig1, ax1 = plt.subplots(figsize=(10, 3))
+    ke_all = photon_energy - spectrum.energy
+    ax1.plot(ke_all, spectrum.intensity, color="0.7", linewidth=0.4, label="Raw survey")
+    ax1.plot(result.bg_ke, result.bg_intensity, "b-", linewidth=1.0,
+             label="Background (peaks masked)")
+    ax1.set_xlabel("Kinetic Energy (eV)")
+    ax1.set_ylabel("Intensity")
+    ax1.legend(fontsize=7)
+    ax1.set_title("Peak masking and background extraction")
+    fig1.tight_layout()
+    st.pyplot(fig1)
+    plt.close(fig1)
+
+    # Plot 2: T(KE) with fit
+    fig2, (ax2a, ax2b) = plt.subplots(1, 2, figsize=(12, 4))
+
+    # Linear scale
+    ax2a.scatter(result.ke_data, result.t_data, s=3, alpha=0.3, color="steelblue",
+                 label="B(KE) × KE² (data)")
+    ax2a.plot(result.ke_fit, result.t_fit, "r-", linewidth=1.5,
+              label=f"Fit: a·KE^({result.n:.2f})")
+    ax2a.set_xlabel("Kinetic Energy (eV)")
+    ax2a.set_ylabel("T(KE) (normalized)")
+    ax2a.legend(fontsize=7)
+    ax2a.set_title("Transmission Function — Linear")
+
+    # Log-log scale
+    ax2b.scatter(result.ke_data, result.t_data, s=3, alpha=0.3, color="steelblue",
+                 label="Data")
+    ax2b.plot(result.ke_fit, result.t_fit, "r-", linewidth=1.5,
+              label=f"n = {result.n:.3f}")
+    ax2b.set_xscale("log")
+    ax2b.set_yscale("log")
+    ax2b.set_xlabel("Kinetic Energy (eV)")
+    ax2b.set_ylabel("T(KE) (normalized)")
+    ax2b.legend(fontsize=7)
+    ax2b.set_title("Transmission Function — Log-Log")
+
+    fig2.tight_layout()
+    st.pyplot(fig2)
+    plt.close(fig2)
+
+    # Interpretation
+    st.markdown("---")
+    st.markdown("**Interpretation:**")
+    if -1.5 < result.n < -0.3:
+        st.success(
+            f"Exponent n = {result.n:.2f} is consistent with a CHA analyzer "
+            f"in FAT (Fixed Analyzer Transmission) mode. Typical values range "
+            f"from −0.5 to −1.0.")
+    elif abs(result.n) < 0.3:
+        st.success(
+            f"Exponent n = {result.n:.2f} is near zero, consistent with a CHA "
+            f"analyzer in FRR (Fixed Retarding Ratio) mode or a well-corrected "
+            f"FAT mode instrument.")
+    else:
+        st.warning(
+            f"Exponent n = {result.n:.2f} is outside the typical range for "
+            f"standard CHA analyzers. This may indicate non-standard operating "
+            f"conditions, sample charging, or a different analyzer geometry.")
+
+
 def main() -> None:
-    tab_periodic, tab_search, tab_simulation, tab_analysis = st.tabs([
+    tab_periodic, tab_search, tab_simulation, tab_transmission, tab_analysis = st.tabs([
         "Periodic Table Reference", "Peak Search", "Spectrum Simulation",
-        "Spectrum Analysis"])
+        "Transmission Function", "Spectrum Analysis"])
 
     # ---- Sidebar: file upload and settings ----
     with st.sidebar:
@@ -744,6 +902,10 @@ def main() -> None:
     # ---- Simulation tab ----
     with tab_simulation:
         _render_simulation_tab()
+
+    # ---- Transmission Function tab ----
+    with tab_transmission:
+        _render_transmission_tab()
 
     # ---- Analysis tab ----
     with tab_analysis:
