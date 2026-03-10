@@ -296,9 +296,301 @@ def _run_fit_section(spectrum, peaks, doublets, shared_fwhm_groups, bg_method,
                            file_name="report.html", mime="text/html")
 
 
+def _parse_formula(name: str) -> dict[str, int]:
+    """Parse chemical state name into element counts, e.g. 'Nb2O5' -> {'Nb':2,'O':5}."""
+    import re as _re
+    _MANUAL = {
+        "C-C": {"C": 1}, "C-O": {"C": 1, "O": 1}, "C=O": {"C": 1, "O": 1},
+        "O-C=O": {"C": 1, "O": 2}, "CO3": {"C": 1, "O": 3},
+        "CF2": {"C": 1, "F": 2}, "CF3": {"C": 1, "F": 3},
+        "Metal oxide": {"O": 1}, "Hydroxide": {"O": 1, "H": 1},
+        "C-O": {"O": 1}, "Adsorbed H2O": {"H": 2, "O": 1},
+        "Metal nitride": {"N": 1}, "Amine": {"N": 1}, "Amide": {"N": 1},
+        "Pyrrolic": {"N": 1}, "Quaternary-N": {"N": 1},
+        "N-oxide": {"N": 1, "O": 1}, "Nitrate": {"N": 1, "O": 3},
+        "Metal fluoride": {"F": 1}, "Organic F": {"F": 1},
+        "Sulfide": {"S": 1}, "Thiol": {"S": 1}, "S elemental": {"S": 1},
+        "Sulfite": {"S": 1, "O": 3}, "Sulfonate": {"S": 1, "O": 3},
+        "Sulfate": {"S": 1, "O": 4}, "Chloride": {"Cl": 1},
+        "Organic Cl": {"Cl": 1}, "ClO3": {"Cl": 1, "O": 3},
+        "Bromide": {"Br": 1}, "Br organic": {"Br": 1},
+        "Iodide": {"I": 1}, "Iodate": {"I": 1, "O": 3},
+        "Phosphate": {"P": 1, "O": 4}, "Satellite": {}, "Shake-up": {},
+    }
+    if name in _MANUAL:
+        return _MANUAL[name]
+    low = name.lower()
+    if "metal" in low or "elemental" in low:
+        return {}
+    formula = name.strip()
+    formula = _re.sub(r'\s*\d*[+-]$', '', formula)
+    if '/' in formula:
+        formula = formula.split('/')[0]
+    if ' ' in formula:
+        formula = formula.split(' ')[0]
+    # Expand parentheses e.g. Ni(OH)2
+    while '(' in formula:
+        m = _re.search(r'\(([^)]+)\)(\d*)', formula)
+        if not m:
+            break
+        inner, mult = m.group(1), int(m.group(2)) if m.group(2) else 1
+        expanded = ''
+        for em in _re.finditer(r'([A-Z][a-z]?)(\d*)', inner):
+            n = int(em.group(2)) if em.group(2) else 1
+            expanded += f"{em.group(1)}{n * mult}"
+        formula = formula[:m.start()] + expanded + formula[m.end():]
+    counts = {}
+    for m in _re.finditer(r'([A-Z][a-z]?)(\d*)', formula):
+        sym, n = m.group(1), int(m.group(2)) if m.group(2) else 1
+        counts[sym] = counts.get(sym, 0) + n
+    return counts
+
+
+def _compute_composition(selected_states, amounts):
+    """Compute atomic % from selected chemical states and their amounts.
+
+    Parameters
+    ----------
+    selected_states : list of (element_symbol, ChemicalState, CoreLevelRef)
+    amounts : dict mapping state name to relative amount of the *primary element*
+
+    Returns
+    -------
+    dict mapping element symbol to atomic percent (summing to 100)
+    """
+    atom_counts: dict[str, float] = {}
+    for elem_sym, cs, ref in selected_states:
+        amt = amounts.get(cs.name, 0.0)
+        if amt <= 0:
+            continue
+        formula = _parse_formula(cs.name)
+        if not formula:
+            # Pure element state
+            atom_counts[elem_sym] = atom_counts.get(elem_sym, 0) + amt
+        else:
+            # Find how many of the primary element per formula unit
+            primary_per_fu = formula.get(elem_sym, 1)
+            # Scale: user sets amount of primary element atoms
+            fu = amt / primary_per_fu
+            for sym, count in formula.items():
+                atom_counts[sym] = atom_counts.get(sym, 0) + fu * count
+    total = sum(atom_counts.values())
+    if total <= 0:
+        return {}
+    return {sym: 100.0 * v / total for sym, v in atom_counts.items()}
+
+
+def _render_simulation_tab():
+    """Render the spectrum simulation tab with element selection wizard."""
+    from xpsanalysis.reference import REFERENCE_DB, get_element
+    from xpsanalysis.synthetic import _pseudo_voigt, _shirley_step
+
+    st.subheader("Spectrum Simulation")
+    st.caption(
+        "Select elements, choose oxidation states, set compositions, "
+        "and generate a simulated XPS spectrum. Ligand content (O, N, etc.) "
+        "is automatically constrained by compound stoichiometry.")
+
+    # --- Build lookup of elements with chemical states ---
+    db_symbols = set()
+    elem_states: dict[str, list[tuple]] = {}  # sym -> [(cs, ref), ...]
+    for ref in REFERENCE_DB:
+        if not ref.chemical_states:
+            continue
+        db_symbols.add(ref.element_symbol)
+        for cs in ref.chemical_states:
+            elem_states.setdefault(ref.element_symbol, []).append((cs, ref))
+
+    # --- Step 1: Element selection via periodic table ---
+    st.markdown("### Step 1: Select Elements")
+    if "_sim_elements" not in st.session_state:
+        st.session_state["_sim_elements"] = set()
+    sel_elems = st.session_state["_sim_elements"]
+
+    for row in _PT_LAYOUT:
+        cols = st.columns(18)
+        for ci, cell in enumerate(row):
+            if cell is None:
+                cols[ci].write("")
+                continue
+            sym, z = cell
+            if sym not in db_symbols:
+                cols[ci].write(f":gray[{sym}]")
+                continue
+            is_sel = sym in sel_elems
+            label = f"**[{sym}]**" if is_sel else sym
+            if cols[ci].button(label, key=f"sim_pt_{sym}", use_container_width=True):
+                if sym in sel_elems:
+                    sel_elems.discard(sym)
+                else:
+                    sel_elems.add(sym)
+                st.rerun()
+
+    if not sel_elems:
+        st.info("Click elements above to select them for simulation.")
+        return
+
+    sel_sorted = sorted(sel_elems, key=lambda s: next(
+        (r.atomic_number for r in REFERENCE_DB if r.element_symbol == s), 0))
+    st.write("**Selected:** " + ", ".join(sel_sorted))
+
+    # --- Step 2: Oxidation state selection ---
+    st.markdown("### Step 2: Choose Oxidation States")
+    if "_sim_checked_states" not in st.session_state:
+        st.session_state["_sim_checked_states"] = {}
+    checked = st.session_state["_sim_checked_states"]
+
+    active_states = []  # (elem_sym, cs, ref)
+    for sym in sel_sorted:
+        states = elem_states.get(sym, [])
+        if not states:
+            continue
+        st.markdown(f"**{sym}**")
+        for cs, ref in states:
+            key = f"sim_cs_{sym}_{cs.name}"
+            default = checked.get(key, False)
+            formula = _parse_formula(cs.name)
+            formula_str = ""
+            if formula:
+                ligands = {k: v for k, v in formula.items() if k != sym}
+                if ligands:
+                    formula_str = " — stoich: " + ", ".join(
+                        f"{v} {k}" for k, v in ligands.items()) + f" per {formula.get(sym, 1)} {sym}"
+            val = st.checkbox(
+                f"{cs.name} ({cs.binding_energy:.1f} eV){formula_str}",
+                value=default, key=key)
+            checked[key] = val
+            if val:
+                active_states.append((sym, cs, ref))
+
+    if not active_states:
+        st.info("Select at least one oxidation state above.")
+        return
+
+    # --- Step 3: Set composition ---
+    st.markdown("### Step 3: Set Composition (Atomic %)")
+    st.caption(
+        "Set the amount of each chemical state in atomic % of the primary element. "
+        "Ligand content (e.g., O in oxides) is calculated from stoichiometry.")
+
+    amounts = {}
+    comp_cols = st.columns(min(len(active_states), 3))
+    for i, (sym, cs, ref) in enumerate(active_states):
+        with comp_cols[i % len(comp_cols)]:
+            val = st.number_input(
+                f"{cs.name} ({sym})", min_value=0.0, max_value=100.0,
+                value=10.0, step=1.0, key=f"sim_amt_{cs.name}")
+            amounts[cs.name] = val
+
+    # Compute and display composition
+    composition = _compute_composition(active_states, amounts)
+    if composition:
+        st.markdown("**Calculated composition (atomic %):**")
+        comp_data = []
+        for sym in sorted(composition, key=lambda s: -composition[s]):
+            comp_data.append({"Element": sym, "Atomic %": f"{composition[sym]:.1f}"})
+        st.table(comp_data)
+
+    # --- Generate spectrum ---
+    if st.button("Generate Spectrum", type="primary", key="sim_generate"):
+        _generate_simulation(active_states, amounts, composition)
+
+    # Show stored result
+    if "_sim_result" in st.session_state:
+        for fig in st.session_state["_sim_result"]:
+            st.pyplot(fig)
+
+
+def _generate_simulation(active_states, amounts, composition):
+    """Generate and display simulated XPS spectra."""
+    from xpsanalysis.synthetic import _pseudo_voigt, _shirley_step
+
+    if not composition:
+        st.error("Set non-zero amounts for at least one state.")
+        return
+
+    # Group states by core level (element + orbital)
+    regions: dict[str, list] = {}  # "Sym orbital" -> [(cs, ref, at%)]
+    for sym, cs, ref in active_states:
+        amt = amounts.get(cs.name, 0.0)
+        if amt <= 0:
+            continue
+        label = f"{sym} {ref.orbital}"
+        regions.setdefault(label, []).append((cs, ref, amt))
+
+    # Also add ligand core levels if they're in the composition
+    # (O 1s, N 1s, etc.) — auto-generated from stoichiometry
+    from xpsanalysis.reference import REFERENCE_DB
+    ligand_elements = set(composition.keys()) - {sym for sym, _, _ in active_states}
+    for lig_sym in ligand_elements:
+        # Find the primary core level for this ligand
+        for ref in REFERENCE_DB:
+            if ref.element_symbol == lig_sym and ref.chemical_states:
+                label = f"{lig_sym} {ref.orbital}"
+                if label not in regions:
+                    # Use the first chemical state as representative
+                    regions[label] = [(ref.chemical_states[0], ref,
+                                       composition.get(lig_sym, 0))]
+                break
+
+    figs = []
+    total_at = sum(composition.values())
+
+    for region_label, states_in_region in sorted(regions.items()):
+        ref0 = states_in_region[0][1]
+        # Energy range
+        all_be = []
+        for cs, ref, _ in states_in_region:
+            all_be.append(cs.binding_energy)
+            if ref.is_doublet and ref.splitting:
+                all_be.append(cs.binding_energy + ref.splitting)
+        e_min = min(all_be) - 8
+        e_max = max(all_be) + 8
+        x = np.linspace(e_min, e_max, 600)
+
+        fig, ax = plt.subplots(figsize=(7, 3))
+        total_y = np.zeros_like(x)
+        max_amp = 1000.0
+
+        for cs, ref, amt in states_in_region:
+            # Scale amplitude by amount and sensitivity factor
+            amp = max_amp * (amt / max(sum(a for _, _, a in states_in_region), 1))
+            sigma = ref.typical_sigma
+            y = _pseudo_voigt(x, cs.binding_energy, sigma, 0.3, amp)
+            if ref.is_doublet and ref.splitting and ref.branching_ratio:
+                y2 = _pseudo_voigt(x, cs.binding_energy + ref.splitting,
+                                   sigma, 0.3, amp * ref.branching_ratio)
+                y = y + y2
+            ax.fill_between(x, y, alpha=0.3, label=cs.name)
+            total_y += y
+
+        # Add Shirley background
+        bg_center = (e_min + e_max) / 2
+        bg = _shirley_step(x, 80, 30, bg_center, 2.0)
+        total_y += bg
+
+        # Add noise
+        rng = np.random.default_rng(42)
+        noise = rng.normal(0, 0.02 * max_amp, size=x.shape)
+        total_y += noise
+
+        ax.plot(x, total_y, "k-", linewidth=1, label="Envelope")
+        ax.set_xlabel("Binding Energy (eV)")
+        ax.set_ylabel("Intensity (arb. units)")
+        ax.invert_xaxis()
+        ax.legend(fontsize=7, loc="upper right")
+        ax.set_title(f"{region_label} — Simulated")
+        fig.tight_layout()
+        figs.append(fig)
+
+    st.session_state["_sim_result"] = figs
+    st.rerun()
+
+
 def main() -> None:
-    tab_periodic, tab_search, tab_analysis = st.tabs([
-        "Periodic Table Reference", "Peak Search", "Spectrum Analysis"])
+    tab_periodic, tab_search, tab_simulation, tab_analysis = st.tabs([
+        "Periodic Table Reference", "Peak Search", "Spectrum Simulation",
+        "Spectrum Analysis"])
 
     # ---- Sidebar: file upload and settings ----
     with st.sidebar:
@@ -315,6 +607,10 @@ def main() -> None:
     # ---- Peak Search tab ----
     with tab_search:
         _render_peak_search()
+
+    # ---- Simulation tab ----
+    with tab_simulation:
+        _render_simulation_tab()
 
     # ---- Analysis tab ----
     with tab_analysis:
