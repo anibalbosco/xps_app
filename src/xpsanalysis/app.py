@@ -29,7 +29,7 @@ _PT_LAYOUT = [
 
 def _render_periodic_table():
     """Render clickable periodic table and element detail panel."""
-    from xpsanalysis.reference import REFERENCE_DB, get_element
+    from xpsanalysis.reference import REFERENCE_DB, AUGER_DB, XRAY_SOURCES, get_element, get_auger_lines
     from xpsanalysis.synthetic import _pseudo_voigt
 
     st.subheader("Periodic Table — XPS Reference")
@@ -150,6 +150,46 @@ def _render_periodic_table():
             fig.tight_layout()
             st.pyplot(fig)
             plt.close(fig)
+
+    # Auger lines for this element
+    auger_lines = get_auger_lines(sel)
+    if auger_lines:
+        st.markdown("---")
+        st.markdown("**Auger Lines**")
+        photon_energy = XRAY_SOURCES["Al Kα (1486.6 eV)"]
+        header = "| Transition | KE (eV) | Apparent BE (eV) | σ (eV) |\n"
+        header += "|---|---|---|---|\n"
+        rows = ""
+        for aug in auger_lines:
+            app_be = photon_energy - aug.kinetic_energy
+            rows += (f"| {aug.element_symbol} {aug.transition} "
+                     f"| {aug.kinetic_energy:.1f} | {app_be:.1f} "
+                     f"| {aug.typical_sigma:.1f} |\n")
+        st.markdown(header + rows)
+        st.caption("Apparent BE calculated for Al Kα (1486.6 eV). "
+                   "Kinetic energy is source-independent.")
+
+        # Plot Auger reference peaks
+        all_app_be = [photon_energy - a.kinetic_energy for a in auger_lines]
+        e_min = min(all_app_be) - 10
+        e_max = max(all_app_be) + 10
+        x = np.linspace(e_min, e_max, 500)
+        fig, ax = plt.subplots(figsize=(6, 2.5))
+        total = np.zeros_like(x)
+        for aug in auger_lines:
+            app_be = photon_energy - aug.kinetic_energy
+            y = _pseudo_voigt(x, app_be, aug.typical_sigma, 0.5, 100 * aug.relative_intensity)
+            ax.fill_between(x, y, alpha=0.3, label=f"{aug.transition} (KE={aug.kinetic_energy:.0f})")
+            total += y
+        ax.plot(x, total, "k-", linewidth=1, label="Sum")
+        ax.set_xlabel("Binding Energy (eV)")
+        ax.set_ylabel("Intensity (ref)")
+        ax.invert_xaxis()
+        ax.legend(fontsize=7, loc="upper right")
+        ax.set_title(f"{sel} Auger lines (Al Kα)")
+        fig.tight_layout()
+        st.pyplot(fig)
+        plt.close(fig)
 
     st.markdown("---")
     st.markdown(
@@ -502,12 +542,15 @@ def _render_simulation_tab():
 
 
 def _generate_simulation(active_states, amounts, composition):
-    """Generate and display simulated XPS spectra."""
+    """Generate and display simulated XPS spectra including Auger peaks."""
     from xpsanalysis.synthetic import _pseudo_voigt, _shirley_step
+    from xpsanalysis.reference import REFERENCE_DB, AUGER_DB, XRAY_SOURCES
 
     if not composition:
         st.error("Set non-zero amounts for at least one state.")
         return
+
+    photon_energy = XRAY_SOURCES["Al Kα (1486.6 eV)"]
 
     # Group states by core level (element + orbital)
     regions: dict[str, list] = {}  # "Sym orbital" -> [(cs, ref, at%)]
@@ -520,25 +563,30 @@ def _generate_simulation(active_states, amounts, composition):
 
     # Also add ligand core levels if they're in the composition
     # (O 1s, N 1s, etc.) — auto-generated from stoichiometry
-    from xpsanalysis.reference import REFERENCE_DB
     ligand_elements = set(composition.keys()) - {sym for sym, _, _ in active_states}
     for lig_sym in ligand_elements:
-        # Find the primary core level for this ligand
         for ref in REFERENCE_DB:
             if ref.element_symbol == lig_sym and ref.chemical_states:
                 label = f"{lig_sym} {ref.orbital}"
                 if label not in regions:
-                    # Use the first chemical state as representative
                     regions[label] = [(ref.chemical_states[0], ref,
                                        composition.get(lig_sym, 0))]
                 break
 
-    figs = []
-    total_at = sum(composition.values())
+    # Collect Auger lines for all elements in the composition
+    auger_regions: dict[str, list] = {}  # "Sym TRANS Auger" -> [(aug, at%)]
+    for sym, at_pct in composition.items():
+        if at_pct <= 0:
+            continue
+        for aug in AUGER_DB:
+            if aug.element_symbol == sym:
+                label = f"{sym} {aug.transition} Auger"
+                auger_regions.setdefault(label, []).append((aug, at_pct))
 
+    figs = []
+
+    # --- Photoelectron regions ---
     for region_label, states_in_region in sorted(regions.items()):
-        ref0 = states_in_region[0][1]
-        # Energy range
         all_be = []
         for cs, ref, _ in states_in_region:
             all_be.append(cs.binding_energy)
@@ -553,7 +601,6 @@ def _generate_simulation(active_states, amounts, composition):
         max_amp = 1000.0
 
         for cs, ref, amt in states_in_region:
-            # Scale amplitude by amount and sensitivity factor
             amp = max_amp * (amt / max(sum(a for _, _, a in states_in_region), 1))
             sigma = ref.typical_sigma
             y = _pseudo_voigt(x, cs.binding_energy, sigma, 0.3, amp)
@@ -564,15 +611,11 @@ def _generate_simulation(active_states, amounts, composition):
             ax.fill_between(x, y, alpha=0.3, label=cs.name)
             total_y += y
 
-        # Add Shirley background
         bg_center = (e_min + e_max) / 2
         bg = _shirley_step(x, 80, 30, bg_center, 2.0)
         total_y += bg
-
-        # Add noise
         rng = np.random.default_rng(42)
-        noise = rng.normal(0, 0.02 * max_amp, size=x.shape)
-        total_y += noise
+        total_y += rng.normal(0, 0.02 * max_amp, size=x.shape)
 
         ax.plot(x, total_y, "k-", linewidth=1, label="Envelope")
         ax.set_xlabel("Binding Energy (eV)")
@@ -580,6 +623,41 @@ def _generate_simulation(active_states, amounts, composition):
         ax.invert_xaxis()
         ax.legend(fontsize=7, loc="upper right")
         ax.set_title(f"{region_label} — Simulated")
+        fig.tight_layout()
+        figs.append(fig)
+
+    # --- Auger regions ---
+    for region_label, auger_in_region in sorted(auger_regions.items()):
+        all_app_be = [photon_energy - aug.kinetic_energy for aug, _ in auger_in_region]
+        e_min = min(all_app_be) - 12
+        e_max = max(all_app_be) + 12
+        x = np.linspace(e_min, e_max, 600)
+
+        fig, ax = plt.subplots(figsize=(7, 3))
+        total_y = np.zeros_like(x)
+        max_amp = 800.0
+        total_at = max(sum(at for _, at in auger_in_region), 1)
+
+        for aug, at_pct in auger_in_region:
+            app_be = photon_energy - aug.kinetic_energy
+            amp = max_amp * aug.relative_intensity * (at_pct / total_at)
+            y = _pseudo_voigt(x, app_be, aug.typical_sigma, 0.5, amp)
+            ax.fill_between(x, y, alpha=0.3,
+                            label=f"{aug.transition} (KE={aug.kinetic_energy:.0f})")
+            total_y += y
+
+        bg_center = (e_min + e_max) / 2
+        bg = _shirley_step(x, 60, 25, bg_center, 3.0)
+        total_y += bg
+        rng = np.random.default_rng(43)
+        total_y += rng.normal(0, 0.02 * max_amp, size=x.shape)
+
+        ax.plot(x, total_y, "k-", linewidth=1, label="Envelope")
+        ax.set_xlabel("Binding Energy (eV)")
+        ax.set_ylabel("Intensity (arb. units)")
+        ax.invert_xaxis()
+        ax.legend(fontsize=7, loc="upper right")
+        ax.set_title(f"{region_label} — Simulated (Al Kα)")
         fig.tight_layout()
         figs.append(fig)
 

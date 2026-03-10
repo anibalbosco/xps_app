@@ -410,59 +410,67 @@ class AugerLine:
     element_name: str
     transition: str
     kinetic_energy: float
+    typical_sigma: float = 2.5
+    relative_intensity: float = 0.5
+
+
+def _aug(sym, name, trans, ke, sig=2.5, ri=0.5):
+    """Shorthand Auger constructor."""
+    return AugerLine(sym, name, trans, ke, sig, ri)
+
 
 AUGER_DB: list[AugerLine] = [
-    # KLL transitions
-    AugerLine("C", "Carbon", "KLL", 263.0),
-    AugerLine("N", "Nitrogen", "KLL", 379.0),
-    AugerLine("O", "Oxygen", "KLL", 510.0),
-    AugerLine("F", "Fluorine", "KLL", 656.0),
-    AugerLine("Na", "Sodium", "KLL", 990.0),
-    AugerLine("Mg", "Magnesium", "KLL", 1186.0),
-    AugerLine("Al", "Aluminum", "KLL", 1393.0),
-    AugerLine("Si", "Silicon", "KLL", 1619.0),
-    # LMM transitions
-    AugerLine("P", "Phosphorus", "LMM", 120.0),
-    AugerLine("S", "Sulfur", "LMM", 152.0),
-    AugerLine("Cl", "Chlorine", "LMM", 181.0),
-    AugerLine("K", "Potassium", "LMM", 252.0),
-    AugerLine("Ca", "Calcium", "LMM", 291.0),
-    AugerLine("Ti", "Titanium", "LMM", 418.0),
-    AugerLine("V", "Vanadium", "LMM", 473.0),
-    AugerLine("Cr", "Chromium", "LMM", 529.0),
-    AugerLine("Mn", "Manganese", "LMM", 589.0),
-    AugerLine("Fe", "Iron", "LMM", 703.0),
-    AugerLine("Co", "Cobalt", "LMM", 775.0),
-    AugerLine("Ni", "Nickel", "LMM", 848.0),
-    AugerLine("Cu", "Copper", "LMM", 918.0),
-    AugerLine("Zn", "Zinc", "LMM", 988.0),
-    AugerLine("Ga", "Gallium", "LMM", 1068.0),
-    AugerLine("Ge", "Germanium", "LMM", 1147.0),
-    AugerLine("As", "Arsenic", "LMM", 1228.0),
-    # MNN transitions
-    AugerLine("Zr", "Zirconium", "MNN", 147.0),
-    AugerLine("Nb", "Niobium", "MNN", 167.0),
-    AugerLine("Mo", "Molybdenum", "MNN", 186.0),
-    AugerLine("Ru", "Ruthenium", "MNN", 228.0),
-    AugerLine("Rh", "Rhodium", "MNN", 253.0),
-    AugerLine("Pd", "Palladium", "MNN", 279.0),
-    AugerLine("Ag", "Silver", "MNN", 351.0),
-    AugerLine("Cd", "Cadmium", "MNN", 376.0),
-    AugerLine("In", "Indium", "MNN", 404.0),
-    AugerLine("Sn", "Tin", "MNN", 430.0),
-    AugerLine("Sb", "Antimony", "MNN", 454.0),
-    AugerLine("Te", "Tellurium", "MNN", 483.0),
-    AugerLine("Ba", "Barium", "MNN", 584.0),
-    AugerLine("La", "Lanthanum", "MNN", 625.0),
-    AugerLine("Ce", "Cerium", "MNN", 661.0),
-    AugerLine("Pb", "Lead", "MNN", 94.0),
-    AugerLine("Bi", "Bismuth", "MNN", 101.0),
-    # NOO / NVV transitions
-    AugerLine("Hf", "Hafnium", "NOO", 176.0),
-    AugerLine("Ta", "Tantalum", "NOO", 179.0),
-    AugerLine("W", "Tungsten", "NOO", 179.0),
-    AugerLine("Pt", "Platinum", "NOO", 168.0),
-    AugerLine("Au", "Gold", "NOO", 165.0),
+    # KLL transitions — sharp, intense
+    _aug("C", "Carbon", "KLL", 263.0, 2.0, 0.6),
+    _aug("N", "Nitrogen", "KLL", 379.0, 2.0, 0.6),
+    _aug("O", "Oxygen", "KLL", 510.0, 2.5, 0.7),
+    _aug("F", "Fluorine", "KLL", 656.0, 2.5, 0.5),
+    _aug("Na", "Sodium", "KLL", 990.0, 2.5, 0.8),
+    _aug("Mg", "Magnesium", "KLL", 1186.0, 2.5, 0.7),
+    _aug("Al", "Aluminum", "KLL", 1393.0, 3.0, 0.6),
+    _aug("Si", "Silicon", "KLL", 1619.0, 3.0, 0.5),
+    # LMM transitions — broader, moderate intensity
+    _aug("P", "Phosphorus", "LMM", 120.0, 2.5, 0.4),
+    _aug("S", "Sulfur", "LMM", 152.0, 2.5, 0.5),
+    _aug("Cl", "Chlorine", "LMM", 181.0, 2.5, 0.5),
+    _aug("K", "Potassium", "LMM", 252.0, 3.0, 0.5),
+    _aug("Ca", "Calcium", "LMM", 291.0, 3.0, 0.5),
+    _aug("Ti", "Titanium", "LMM", 418.0, 3.0, 0.6),
+    _aug("V", "Vanadium", "LMM", 473.0, 3.0, 0.5),
+    _aug("Cr", "Chromium", "LMM", 529.0, 3.0, 0.6),
+    _aug("Mn", "Manganese", "LMM", 589.0, 3.0, 0.6),
+    _aug("Fe", "Iron", "LMM", 703.0, 3.5, 0.7),
+    _aug("Co", "Cobalt", "LMM", 775.0, 3.5, 0.6),
+    _aug("Ni", "Nickel", "LMM", 848.0, 3.5, 0.7),
+    _aug("Cu", "Copper", "LMM", 918.0, 3.0, 0.8),
+    _aug("Zn", "Zinc", "LMM", 988.0, 3.0, 0.7),
+    _aug("Ga", "Gallium", "LMM", 1068.0, 3.0, 0.5),
+    _aug("Ge", "Germanium", "LMM", 1147.0, 3.0, 0.5),
+    _aug("As", "Arsenic", "LMM", 1228.0, 3.0, 0.5),
+    # MNN transitions — broader
+    _aug("Zr", "Zirconium", "MNN", 147.0, 3.5, 0.4),
+    _aug("Nb", "Niobium", "MNN", 167.0, 3.5, 0.4),
+    _aug("Mo", "Molybdenum", "MNN", 186.0, 3.5, 0.5),
+    _aug("Ru", "Ruthenium", "MNN", 228.0, 3.5, 0.4),
+    _aug("Rh", "Rhodium", "MNN", 253.0, 3.5, 0.4),
+    _aug("Pd", "Palladium", "MNN", 279.0, 3.5, 0.5),
+    _aug("Ag", "Silver", "MNN", 351.0, 3.0, 0.6),
+    _aug("Cd", "Cadmium", "MNN", 376.0, 3.5, 0.4),
+    _aug("In", "Indium", "MNN", 404.0, 3.5, 0.4),
+    _aug("Sn", "Tin", "MNN", 430.0, 3.5, 0.5),
+    _aug("Sb", "Antimony", "MNN", 454.0, 3.5, 0.4),
+    _aug("Te", "Tellurium", "MNN", 483.0, 3.5, 0.4),
+    _aug("Ba", "Barium", "MNN", 584.0, 4.0, 0.4),
+    _aug("La", "Lanthanum", "MNN", 625.0, 4.0, 0.4),
+    _aug("Ce", "Cerium", "MNN", 661.0, 4.0, 0.4),
+    _aug("Pb", "Lead", "MNN", 94.0, 3.5, 0.5),
+    _aug("Bi", "Bismuth", "MNN", 101.0, 3.5, 0.4),
+    # NOO / NVV transitions — broad, lower intensity
+    _aug("Hf", "Hafnium", "NOO", 176.0, 4.0, 0.3),
+    _aug("Ta", "Tantalum", "NOO", 179.0, 4.0, 0.3),
+    _aug("W", "Tungsten", "NOO", 179.0, 4.0, 0.3),
+    _aug("Pt", "Platinum", "NOO", 168.0, 4.0, 0.4),
+    _aug("Au", "Gold", "NOO", 165.0, 4.0, 0.4),
 ]
 
 
@@ -567,6 +575,11 @@ def get_core_level(symbol: str, orbital: str) -> CoreLevelRef | None:
 def get_element(symbol: str) -> list[CoreLevelRef]:
     """Return all core levels for an element."""
     return [r for r in REFERENCE_DB if r.element_symbol == symbol]
+
+
+def get_auger_lines(symbol: str) -> list[AugerLine]:
+    """Return all Auger lines for an element."""
+    return [a for a in AUGER_DB if a.element_symbol == symbol]
 
 
 def parse_core_level_label(label: str) -> tuple[str, str] | None:
