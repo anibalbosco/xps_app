@@ -761,28 +761,53 @@ def _render_transmission_tab():
                                   format_func=lambda i: labels[i], key="tf_region")
     spectrum = spectra[region_idx]
 
+    # Energy scale and source selection
+    param_cols = st.columns(4)
+    with param_cols[0]:
+        source_name = st.selectbox("X-ray source", list(XRAY_SOURCES.keys()),
+                                   key="tf_source")
+        photon_energy = XRAY_SOURCES[source_name]
+    with param_cols[1]:
+        # Auto-detect: if max energy > photon_energy, likely KE
+        e_max_data = float(spectrum.energy.max())
+        auto_guess = "Kinetic Energy" if e_max_data > photon_energy * 0.85 else "Binding Energy"
+        energy_scale = st.selectbox(
+            "Energy axis in file", ["Binding Energy", "Kinetic Energy"],
+            index=0 if auto_guess == "Binding Energy" else 1,
+            key="tf_energy_scale")
+
+    # Convert to BE if needed
+    if energy_scale == "Kinetic Energy":
+        energy_be = photon_energy - spectrum.energy
+        x_label_raw = "Kinetic Energy (eV)"
+        x_data_raw = spectrum.energy
+    else:
+        energy_be = spectrum.energy
+        x_label_raw = "Binding Energy (eV)"
+        x_data_raw = spectrum.energy
+
     # Show raw survey
     fig_raw, ax_raw = plt.subplots(figsize=(10, 3))
-    ax_raw.plot(spectrum.energy, spectrum.intensity, "k-", linewidth=0.6)
-    ax_raw.set_xlabel("Binding Energy (eV)")
+    ax_raw.plot(x_data_raw, spectrum.intensity, "k-", linewidth=0.6)
+    ax_raw.set_xlabel(x_label_raw)
     ax_raw.set_ylabel("Intensity")
-    ax_raw.invert_xaxis()
+    if energy_scale == "Binding Energy":
+        ax_raw.invert_xaxis()
     ax_raw.set_title("Survey Spectrum")
     fig_raw.tight_layout()
     st.pyplot(fig_raw)
     plt.close(fig_raw)
 
+    if energy_scale == "Kinetic Energy":
+        be_min, be_max = float(energy_be.min()), float(energy_be.max())
+        st.caption(f"Converted to BE: {be_min:.0f} – {be_max:.0f} eV")
+
     # Parameters
-    col1, col2, col3 = st.columns(3)
-    with col1:
-        source_name = st.selectbox("X-ray source", list(XRAY_SOURCES.keys()),
-                                   key="tf_source")
-        photon_energy = XRAY_SOURCES[source_name]
-    with col2:
+    with param_cols[2]:
         mask_width = st.number_input("Peak mask width ± (eV)", value=8.0,
                                      min_value=2.0, max_value=30.0, step=1.0,
                                      key="tf_mask_width")
-    with col3:
+    with param_cols[3]:
         ke_min = st.number_input("Min KE (eV)", value=50.0, min_value=10.0,
                                  max_value=500.0, step=10.0, key="tf_ke_min")
 
@@ -790,7 +815,7 @@ def _render_transmission_tab():
         from xpsanalysis.transmission import extract_transmission
         try:
             result = extract_transmission(
-                spectrum.energy, spectrum.intensity,
+                energy_be, spectrum.intensity,
                 photon_energy=photon_energy,
                 mask_width_ev=mask_width,
                 ke_min=ke_min,
