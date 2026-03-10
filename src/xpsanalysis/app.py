@@ -585,6 +585,61 @@ def _generate_simulation(active_states, amounts, composition):
 
     figs = []
 
+    # --- Survey spectrum overview ---
+    survey_x = np.linspace(0, photon_energy, 3000)
+    survey_y = np.zeros_like(survey_x)
+    survey_labels = []  # (position, label) for annotation
+    max_at = max(composition.values()) if composition else 1
+
+    # Add all photoelectron peaks to survey
+    for region_label, states_in_region in regions.items():
+        for cs, ref, amt in states_in_region:
+            at_pct = composition.get(ref.element_symbol, amt)
+            amp = 500 * (at_pct / max_at) * ref.sensitivity_factor
+            y = _pseudo_voigt(survey_x, cs.binding_energy, ref.typical_sigma * 1.5, 0.3, amp)
+            if ref.is_doublet and ref.splitting and ref.branching_ratio:
+                y += _pseudo_voigt(survey_x, cs.binding_energy + ref.splitting,
+                                   ref.typical_sigma * 1.5, 0.3, amp * ref.branching_ratio)
+            survey_y += y
+        # Label at the primary peak position
+        main_cs = states_in_region[0][0]
+        survey_labels.append((main_cs.binding_energy, region_label))
+
+    # Add all Auger peaks to survey
+    for region_label, auger_in_region in auger_regions.items():
+        for aug, at_pct in auger_in_region:
+            app_be = photon_energy - aug.kinetic_energy
+            if app_be < 0 or app_be > photon_energy:
+                continue
+            amp = 350 * (at_pct / max_at) * aug.relative_intensity
+            survey_y += _pseudo_voigt(survey_x, app_be, aug.typical_sigma * 1.5, 0.5, amp)
+        aug0 = auger_in_region[0][0]
+        app_be0 = photon_energy - aug0.kinetic_energy
+        if 0 < app_be0 < photon_energy:
+            survey_labels.append((app_be0, region_label))
+
+    # Sloping background typical of survey scans
+    survey_bg = _shirley_step(survey_x, 200, 20, photon_energy / 2, 200)
+    survey_y += survey_bg
+    rng = np.random.default_rng(44)
+    survey_y += rng.normal(0, 8, size=survey_x.shape)
+
+    fig_survey, ax_s = plt.subplots(figsize=(12, 4))
+    ax_s.plot(survey_x, survey_y, "k-", linewidth=0.6)
+    ax_s.set_xlabel("Binding Energy (eV)")
+    ax_s.set_ylabel("Intensity (arb. units)")
+    ax_s.invert_xaxis()
+    ax_s.set_title("Survey Spectrum — Simulated (Al Kα)")
+    # Annotate peaks
+    for pos, lbl in survey_labels:
+        y_at = np.interp(pos, survey_x, survey_y)
+        ax_s.annotate(lbl, xy=(pos, y_at), xytext=(0, 12),
+                       textcoords="offset points", fontsize=6,
+                       ha="center", va="bottom",
+                       arrowprops=dict(arrowstyle="-", lw=0.5, color="0.5"))
+    fig_survey.tight_layout()
+    figs.append(fig_survey)
+
     # --- Photoelectron regions ---
     for region_label, states_in_region in sorted(regions.items()):
         all_be = []
