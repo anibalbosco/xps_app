@@ -82,33 +82,42 @@ def _render_periodic_table():
 
         if ref.chemical_states:
             from xpsanalysis.reference import CITATIONS
-            rows = []
+
+            # Build markdown table with clickable reference links
+            header = "| State | BE (eV) | Description | Reference |\n"
+            header += "|---|---|---|---|\n"
+            table_rows = ""
             for cs in ref.chemical_states:
-                ref_short = cs.reference or ref.reference
-                rows.append({"State": cs.name, "BE (eV)": f"{cs.binding_energy:.1f}",
-                             "Description": cs.description,
-                             "Reference": ref_short if ref_short else "Not known"})
-            st.table(rows)
+                ref_key = cs.reference or ref.reference
+                if ref_key:
+                    entry = CITATIONS.get(ref_key)
+                    doi = entry.get("doi") if entry else None
+                    if doi:
+                        ref_cell = f"[{ref_key}](https://doi.org/{doi})"
+                    else:
+                        ref_cell = ref_key
+                else:
+                    ref_cell = "Not known"
+                desc = cs.description or ""
+                table_rows += f"| {cs.name} | {cs.binding_energy:.1f} | {desc} | {ref_cell} |\n"
+            st.markdown(header + table_rows)
 
             # Show full citations for references used in this table
             used_refs = {cs.reference or ref.reference for cs in ref.chemical_states}
             used_refs.discard("")
             if used_refs:
-                with st.expander("References"):
-                    for key in sorted(used_refs):
-                        entry = CITATIONS.get(key)
-                        if entry:
-                            citation = entry["citation"]
-                            doi = entry.get("doi")
-                            if doi:
-                                st.caption(
-                                    f"**[{key}]** {citation} "
-                                    f"[doi:{doi}](https://doi.org/{doi})"
-                                )
-                            else:
-                                st.caption(f"**[{key}]** {citation}")
+                for key in sorted(used_refs):
+                    entry = CITATIONS.get(key)
+                    if entry:
+                        citation = entry["citation"]
+                        doi = entry.get("doi")
+                        if doi:
+                            st.caption(
+                                f"**[{key}]** {citation} "
+                                f"[doi:{doi}](https://doi.org/{doi})"
+                            )
                         else:
-                            st.caption(f"**[{key}]**")
+                            st.caption(f"**[{key}]** {citation}")
 
             # Plot synthetic reference
             e_min = min(cs.binding_energy for cs in ref.chemical_states) - 5
@@ -147,13 +156,12 @@ def _render_periodic_table():
         "**Data sources:** Binding energies and chemical state assignments "
         "are compiled from the "
         "[NIST X-ray Photoelectron Spectroscopy Database](https://srdata.nist.gov/xps/) "
-        "(Standard Reference Database 20, Version 4.1) and the "
+        "(Standard Reference Database 20, Version 4.1), the "
         "*Handbook of X-ray Photoelectron Spectroscopy* "
-        "(J.F. Moulder et al., Physical Electronics, 1995). "
-        "These are secondary compilations — each entry in the NIST database "
-        "includes full citations to the original experimental literature. "
-        "For primary references behind a specific assignment, consult the "
-        "NIST database entry for that element and core level."
+        "(J.F. Moulder et al., Physical Electronics, 1995), and primary "
+        "literature sources cited in the reference column of each element's table. "
+        "Where available, references link directly to the original publication via DOI. "
+        "Entries marked 'Not known' have not yet been traced to a specific primary source."
     )
 
 
