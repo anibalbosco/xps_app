@@ -786,21 +786,23 @@ def _render_transmission_tab():
         x_label_raw = "Binding Energy (eV)"
         x_data_raw = spectrum.energy
 
-    # Show raw survey
-    fig_raw, ax_raw = plt.subplots(figsize=(10, 3))
-    ax_raw.plot(x_data_raw, spectrum.intensity, "k-", linewidth=0.6)
-    ax_raw.set_xlabel(x_label_raw)
-    ax_raw.set_ylabel("Intensity")
-    if energy_scale == "Binding Energy":
-        ax_raw.invert_xaxis()
-    ax_raw.set_title("Survey Spectrum")
+    # Compute both scales for all plots
+    ke_all = photon_energy - energy_be
+
+    # Show raw survey in both scales
+    fig_raw, (ax_be, ax_ke) = plt.subplots(1, 2, figsize=(14, 3))
+    ax_be.plot(energy_be, spectrum.intensity, "k-", linewidth=0.6)
+    ax_be.set_xlabel("Binding Energy (eV)")
+    ax_be.set_ylabel("Intensity")
+    ax_be.invert_xaxis()
+    ax_be.set_title("Survey — Binding Energy")
+    ax_ke.plot(ke_all, spectrum.intensity, "k-", linewidth=0.6)
+    ax_ke.set_xlabel("Kinetic Energy (eV)")
+    ax_ke.set_ylabel("Intensity")
+    ax_ke.set_title("Survey — Kinetic Energy")
     fig_raw.tight_layout()
     st.pyplot(fig_raw)
     plt.close(fig_raw)
-
-    if energy_scale == "Kinetic Energy":
-        be_min, be_max = float(energy_be.min()), float(energy_be.max())
-        st.caption(f"Converted to BE: {be_min:.0f} – {be_max:.0f} eV")
 
     # Parameters
     with param_cols[2]:
@@ -840,24 +842,40 @@ def _render_transmission_tab():
         f"Exponent n = {result.n:.3f} ± {result.n_err:.3f} · "
         f"Prefactor a = {result.a:.4f} ± {result.a_err:.4f}")
 
-    # Plot 1: Background with peaks masked
-    fig1, ax1 = plt.subplots(figsize=(10, 3))
-    ke_all = photon_energy - spectrum.energy
-    ax1.plot(ke_all, spectrum.intensity, color="0.7", linewidth=0.4, label="Raw survey")
-    ax1.plot(result.bg_ke, result.bg_intensity, "b-", linewidth=1.0,
-             label="Background (peaks masked)")
-    ax1.set_xlabel("Kinetic Energy (eV)")
-    ax1.set_ylabel("Intensity")
-    ax1.legend(fontsize=7)
-    ax1.set_title("Peak masking and background extraction")
+    # Convert result arrays to both scales
+    bg_be = photon_energy - result.bg_ke
+    data_be = photon_energy - result.ke_data
+    fit_be = photon_energy - result.ke_fit
+
+    # Plot 1: Background with peaks masked — BE and KE
+    fig1, (ax1a, ax1b) = plt.subplots(1, 2, figsize=(14, 3.5))
+
+    # BE scale
+    ax1a.plot(energy_be, spectrum.intensity, color="0.7", linewidth=0.4, label="Raw survey")
+    ax1a.plot(bg_be, result.bg_intensity, "b-", linewidth=1.0,
+              label="Background (peaks masked)")
+    ax1a.set_xlabel("Binding Energy (eV)")
+    ax1a.set_ylabel("Intensity")
+    ax1a.invert_xaxis()
+    ax1a.legend(fontsize=7)
+    ax1a.set_title("Peak masking — BE scale")
+
+    # KE scale
+    ax1b.plot(ke_all, spectrum.intensity, color="0.7", linewidth=0.4, label="Raw survey")
+    ax1b.plot(result.bg_ke, result.bg_intensity, "b-", linewidth=1.0,
+              label="Background (peaks masked)")
+    ax1b.set_xlabel("Kinetic Energy (eV)")
+    ax1b.set_ylabel("Intensity")
+    ax1b.legend(fontsize=7)
+    ax1b.set_title("Peak masking — KE scale")
+
     fig1.tight_layout()
     st.pyplot(fig1)
     plt.close(fig1)
 
-    # Plot 2: T(KE) with fit
-    fig2, (ax2a, ax2b) = plt.subplots(1, 2, figsize=(12, 4))
+    # Plot 2: T(KE) with fit — KE linear + KE log-log
+    fig2, (ax2a, ax2b) = plt.subplots(1, 2, figsize=(14, 4))
 
-    # Linear scale
     ax2a.scatter(result.ke_data, result.t_data, s=3, alpha=0.3, color="steelblue",
                  label="B(KE) × KE² (data)")
     ax2a.plot(result.ke_fit, result.t_fit, "r-", linewidth=1.5,
@@ -865,9 +883,8 @@ def _render_transmission_tab():
     ax2a.set_xlabel("Kinetic Energy (eV)")
     ax2a.set_ylabel("T(KE) (normalized)")
     ax2a.legend(fontsize=7)
-    ax2a.set_title("Transmission Function — Linear")
+    ax2a.set_title("Transmission Function — KE Linear")
 
-    # Log-log scale
     ax2b.scatter(result.ke_data, result.t_data, s=3, alpha=0.3, color="steelblue",
                  label="Data")
     ax2b.plot(result.ke_fit, result.t_fit, "r-", linewidth=1.5,
@@ -877,11 +894,41 @@ def _render_transmission_tab():
     ax2b.set_xlabel("Kinetic Energy (eV)")
     ax2b.set_ylabel("T(KE) (normalized)")
     ax2b.legend(fontsize=7)
-    ax2b.set_title("Transmission Function — Log-Log")
+    ax2b.set_title("Transmission Function — KE Log-Log")
 
     fig2.tight_layout()
     st.pyplot(fig2)
     plt.close(fig2)
+
+    # Plot 3: T vs BE scale
+    fig3, (ax3a, ax3b) = plt.subplots(1, 2, figsize=(14, 4))
+
+    ax3a.scatter(data_be, result.t_data, s=3, alpha=0.3, color="steelblue",
+                 label="B(KE) × KE² (data)")
+    ax3a.plot(fit_be, result.t_fit, "r-", linewidth=1.5,
+              label=f"Fit: a·KE^({result.n:.2f})")
+    ax3a.set_xlabel("Binding Energy (eV)")
+    ax3a.set_ylabel("T (normalized)")
+    ax3a.invert_xaxis()
+    ax3a.legend(fontsize=7)
+    ax3a.set_title("Transmission Function — BE Linear")
+
+    pos_data = result.t_data > 0
+    pos_fit = result.t_fit > 0
+    ax3b.scatter(data_be[pos_data], result.t_data[pos_data], s=3, alpha=0.3,
+                 color="steelblue", label="Data")
+    ax3b.plot(fit_be[pos_fit], result.t_fit[pos_fit], "r-", linewidth=1.5,
+              label=f"n = {result.n:.3f}")
+    ax3b.set_yscale("log")
+    ax3b.set_xlabel("Binding Energy (eV)")
+    ax3b.set_ylabel("T (normalized)")
+    ax3b.invert_xaxis()
+    ax3b.legend(fontsize=7)
+    ax3b.set_title("Transmission Function — BE Semi-Log")
+
+    fig3.tight_layout()
+    st.pyplot(fig3)
+    plt.close(fig3)
 
     # Interpretation
     st.markdown("---")
