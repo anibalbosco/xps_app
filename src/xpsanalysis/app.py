@@ -842,6 +842,148 @@ def _render_transmission_tab():
         f"Prefactor a = {result.a:.3e} ± {result.a_err:.3e} "
         f"(normalized scale)")
 
+    # --- Methodology explanation ---
+    with st.expander("Method: step-by-step explanation and references", expanded=True):
+        st.markdown("""
+#### Background and physical basis
+
+The measured XPS intensity for a core level peak is
+([Seah, 1980](#ref1); [Seah & Briggs, 1990](#ref2)):
+
+$$I = n \\, \\sigma \\, \\lambda \\, L(\\gamma) \\, T(E_K)$$
+
+where *n* is the atomic concentration, σ the photoionization cross-section
+([Scofield, 1976](#ref3)), λ the inelastic mean free path
+([Tanuma, Powell & Penn, 1994](#ref4)), L(γ) the angular asymmetry factor,
+and **T(E_K) the analyzer transmission function** — the energy-dependent
+detection efficiency of the spectrometer.
+
+For concentric hemispherical analyzers (CHA) operating in **Fixed Analyzer
+Transmission (FAT)** mode, T follows a power law in kinetic energy
+([Seah, 1980](#ref1)):
+
+$$T(E_K) = a \\cdot E_K^{\\,n}$$
+
+with *n* typically between −0.5 and −1.0.  In **Fixed Retarding Ratio (FRR)**
+mode, T is approximately constant (*n* ≈ 0).
+
+#### Step 1 — Convert to kinetic energy
+
+The binding energy axis is converted to kinetic energy:
+$E_K = h\\nu - E_B$, where hν is the X-ray photon energy
+(Al Kα = 1486.6 eV).
+
+#### Step 2 — Detect and mask photoelectron peaks
+
+Peaks are identified using `scipy.signal.find_peaks` with a prominence
+threshold of 3% of the total intensity range.  A window of ±{mask_width:.0f} eV
+around each detected peak is excluded, leaving only the inter-peak
+background regions.
+
+#### Step 3 — Smooth the background envelope
+
+The remaining background points are smoothed with a Savitzky–Golay filter
+(30 eV window, 2nd-order polynomial) to remove statistical noise while
+preserving the overall energy dependence.
+
+#### Step 4 — Fit the background model
+
+The smoothed background is fitted to a three-parameter model:
+
+$$B(E_K) = A \\cdot E_K^{{\\,m}} + c$$
+
+where *A* and *m* describe the power-law component and *c* is a constant
+baseline (detector dark counts, scattered light, electronic noise).
+
+**Physical justification:**  The survey background between peaks is dominated
+by inelastically scattered electrons and the secondary electron cascade.
+The secondary electron yield at kinetic energies well above the secondary
+electron peak (E_K > 50 eV) decays approximately as E_K⁻²
+([Seah & Dench, 1979](#ref5)).
+The measured background is therefore:
+
+$$B(E_K) \\propto S(E_K) \\times T(E_K) \\approx E_K^{{-2}} \\times a \\cdot E_K^n = a \\cdot E_K^{{n-2}}$$
+
+so the fitted exponent *m* relates to the transmission exponent as
+**n = m + 2**.
+
+#### Step 5 — Extract T(E_K)
+
+The baseline *c* is subtracted from the smoothed background and the result
+is multiplied by E_K² to divide out the secondary cascade:
+
+$$T_{{\\mathrm{{data}}}}(E_K) = [B(E_K) - c] \\times E_K^2$$
+
+This is normalized to its maximum value.  The power law
+T(E_K) = a · E_K^n is then evaluated with *n* from Step 4 and
+the prefactor *a* determined by log-log regression against the
+normalized data.
+
+---
+
+#### Assumptions and limitations
+
+1. **S(E_K) ≈ E_K⁻² approximation.**  The secondary electron cascade
+   follows E/(E+φ)⁴ at low energies (φ = work function), which only
+   approaches E⁻² for E_K ≫ φ.  This is why we exclude E_K < {ke_min:.0f} eV.
+   The approximation improves at higher kinetic energies.
+
+2. **Inelastic tails from photoelectron peaks** also contribute to the
+   inter-peak background.  These do not follow the simple E_K⁻² model
+   ([Tougaard, 1997](#ref6)).  The peak masking mitigates this, but
+   residual inelastic tails between closely spaced peaks can bias the fit.
+
+3. **Material dependence.** The secondary electron yield depends on the
+   sample material (density of states, work function).  The E_K⁻² model
+   is a universal approximation and may deviate for specific materials.
+
+4. **The method works best** with wide survey scans that have well-separated
+   peaks and a large KE range.  Narrow scans or heavily overlapping peaks
+   will yield unreliable results.
+
+5. **The constant baseline *c*** absorbs flat contributions but cannot
+   account for slowly varying instrumental artifacts (e.g., stray
+   electrons, X-ray satellites).
+
+---
+
+#### References
+
+<a id="ref1"></a>
+**[1]** M.P. Seah, "Quantitative prediction of surface concentrations and an
+understanding of XPS for elemental surface compositions using the intensity
+scale," *Surf. Interface Anal.* **2** (1980) 222–239.
+[doi:10.1002/sia.740020607](https://doi.org/10.1002/sia.740020607)
+
+<a id="ref2"></a>
+**[2]** M.P. Seah, "Quantification of AES and XPS," in *Practical Surface
+Analysis*, 2nd ed., Vol. 1, D. Briggs and M.P. Seah, Eds., Wiley, 1990,
+Ch. 5.
+
+<a id="ref3"></a>
+**[3]** J.H. Scofield, "Hartree–Slater subshell photoionization
+cross-sections at 1254 and 1487 eV," *J. Electron Spectrosc. Relat. Phenom.*
+**8** (1976) 129–137.
+[doi:10.1016/0368-2048(76)80015-1](https://doi.org/10.1016/0368-2048(76)80015-1)
+
+<a id="ref4"></a>
+**[4]** S. Tanuma, C.J. Powell, D.R. Penn, "Calculations of electron
+inelastic mean free paths. V. Data for 14 organic compounds over the
+50–2000 eV range," *Surf. Interface Anal.* **21** (1994) 165–176.
+[doi:10.1002/sia.740210302](https://doi.org/10.1002/sia.740210302)
+
+<a id="ref5"></a>
+**[5]** M.P. Seah, W.A. Dench, "Quantitative electron spectroscopy of
+surfaces: A standard data base for electron inelastic mean free paths in
+solids," *Surf. Interface Anal.* **1** (1979) 2–11.
+[doi:10.1002/sia.740010103](https://doi.org/10.1002/sia.740010103)
+
+<a id="ref6"></a>
+**[6]** S. Tougaard, "Universality classes of inelastic electron scattering
+cross-sections," *Surf. Interface Anal.* **25** (1997) 137–154.
+[doi:10.1002/(SICI)1096-9918(199703)25:3<137::AID-SIA230>3.0.CO;2-L](https://doi.org/10.1002/(SICI)1096-9918(199703)25:3<137::AID-SIA230>3.0.CO;2-L)
+""".format(mask_width=mask_width, ke_min=ke_min))
+
     # Convert result arrays to both scales
     bg_be = photon_energy - result.bg_ke
     data_be = photon_energy - result.ke_data
