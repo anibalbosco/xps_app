@@ -835,12 +835,12 @@ def _render_transmission_tab():
     st.markdown("---")
     st.subheader("Results")
 
-    n_sign = "+" if result.n >= 0 else "−"
     st.markdown(
-        f"**T(KE) = {result.a:.4f} × KE^({result.n:+.3f})**")
+        f"**T(KE) = {result.a:.3e} × KE^({result.n:+.3f})**")
     st.caption(
         f"Exponent n = {result.n:.3f} ± {result.n_err:.3f} · "
-        f"Prefactor a = {result.a:.4f} ± {result.a_err:.4f}")
+        f"Prefactor a = {result.a:.3e} ± {result.a_err:.3e} "
+        f"(normalized scale)")
 
     # Convert result arrays to both scales
     bg_be = photon_energy - result.bg_ke

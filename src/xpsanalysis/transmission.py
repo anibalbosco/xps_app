@@ -196,9 +196,14 @@ def extract_transmission(
     t_max = np.max(t_raw)
     t_norm = t_raw / t_max if t_max > 0 else t_raw
 
-    # Prefactor: normalize so T(KE) curve matches the data scale
-    a_fit = t_norm[len(t_norm) // 2] / np.power(ke_valid[len(ke_valid) // 2], n_fit)
-    a_err = abs(a_fit) * n_err / max(abs(n_fit), 0.01)  # propagated
+    # Prefactor: fit a * KE^n to the normalized T data via log-log regression
+    # This gives a physically meaningful prefactor on the normalized scale
+    log_ke_v = np.log(ke_valid)
+    log_t_v = np.log(np.maximum(t_norm, 1e-30))
+    # Use n_fit from the background model, solve for a from the data
+    log_a_fit = np.mean(log_t_v - n_fit * log_ke_v)
+    a_fit = np.exp(log_a_fit)
+    a_err = abs(a_fit) * n_err / max(abs(n_fit), 0.01)
 
     # Generate fitted curve
     ke_curve = np.linspace(ke_min, ke_max, 500)
